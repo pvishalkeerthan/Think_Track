@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function LeaderboardPage() {
+function LeaderboardContent() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -82,5 +82,13 @@ export default function LeaderboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LeaderboardPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading leaderboard...</div>}>
+      <LeaderboardContent />
+    </Suspense>
   );
 }

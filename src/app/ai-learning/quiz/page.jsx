@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle, XCircle, Clock, Trophy } from "lucide-react";
 
-export default function QuizPage() {
+function QuizContent() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [subtopic, setSubtopic] = useState("");
@@ -352,5 +352,13 @@ export default function QuizPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function QuizPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading quiz...</div>}>
+      <QuizContent />
+    </Suspense>
   );
 }

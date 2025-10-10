@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useSearchParams, useRouter } from "next/navigation";
 
-export default function DoubtsPage() {
+function DoubtsContent() {
   const [doubts, setDoubts] = useState([]);
   const [loading, setLoading] = useState(true);
   const searchParams = useSearchParams();
@@ -68,5 +68,13 @@ export default function DoubtsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DoubtsPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading doubts...</div>}>
+      <DoubtsContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
@@ -12,7 +12,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 
-export default function RoadmapPage() {
+function RoadmapContent() {
   const [roadmap, setRoadmap] = useState({});
   const [topicDetails, setTopicDetails] = useState({
     time: "-",
@@ -562,5 +562,13 @@ export default function RoadmapPage() {
 
       <ResourcesModal />
     </div>
+  );
+}
+
+export default function RoadmapPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading roadmap...</div>}>
+      <RoadmapContent />
+    </Suspense>
   );
 }
