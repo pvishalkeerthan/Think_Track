@@ -28,6 +28,13 @@ export async function POST(req) {
       return NextResponse.json({ error: "Test not found" }, { status: 404 });
     }
 
+    // Debug logging
+    console.log("🔥 Test found:", {
+      title: test.title,
+      questionsCount: test.questions.length,
+      firstQuestion: test.questions[0],
+    });
+
     const dbUser = await User.findOne({ email: session.user.email });
     if (!dbUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -50,7 +57,7 @@ export async function POST(req) {
         options: q.options,
         correctAnswer: q.correctAnswer,
       })),
-      
+
       participants: [
         {
           userId: dbUser._id,
@@ -63,7 +70,19 @@ export async function POST(req) {
     });
 
     await newRoom.save();
-  console.log(test.questions[0]); 
+
+    // Debug logging
+    console.log("🔥 Room created with questions:", newRoom.questions.length);
+    console.log("🔥 First question:", newRoom.questions[0]);
+    console.log(
+      "🔥 All questions:",
+      newRoom.questions.map((q) => ({
+        text: q.text,
+        optionsCount: q.options.length,
+        hasCorrectAnswer: !!q.correctAnswer,
+      }))
+    );
+
     return NextResponse.json({ success: true, roomCode, roomId: newRoom._id });
   } catch (error) {
     console.error("🔥 Create Room Error:", error);

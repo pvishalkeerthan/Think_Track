@@ -5,13 +5,15 @@ import { generateQuestions, verifyTestWithGemini } from "@/lib/gemini";
 import Test from "@/models/Test";
 import TestResult from "@/models/TestResult";
 import dbConnect from "@/lib/dbConnect";
+import { awardXP } from "@/lib/gamification";
 
 export async function createTest(testDetails) {
   try {
     await dbConnect();
 
+    // Reduced console noise
     const questions = await generateQuestions(testDetails);
-    console.log(questions, "from create test");
+    // Reduced console noise
 
     if (!Array.isArray(questions) || questions.length === 0) {
       throw new Error("Invalid questions generated");
@@ -23,11 +25,19 @@ export async function createTest(testDetails) {
     });
 
     await newTest.save();
+    // Reduced console noise
 
-    return { success: true, testId: newTest._id.toString() };
+    return {
+      success: true,
+      testId: newTest._id.toString(),
+      message: "Test created successfully!",
+    };
   } catch (error) {
-    console.error("Error creating test:", error);
-    return { success: false, error: error.message };
+    // Avoid console noise; return structured error
+    return {
+      success: false,
+      error: error.message || "Failed to create test. Please try again.",
+    };
   }
 }
 
@@ -35,18 +45,17 @@ export async function getTestById(testId) {
   try {
     await dbConnect();
     const test = await Test.findById(testId);
-    console.log(test, "From actions page");
+    // Removed unnecessary debug log
     if (!test) {
       return null;
     }
 
     return JSON.parse(JSON.stringify(test));
   } catch (error) {
-    console.error("Error fetching test:", error);
+    // Let caller handle fetch error
     return null;
   }
 }
-
 
 export async function submitTest(testId, userAnswers, userId) {
   try {
@@ -54,19 +63,19 @@ export async function submitTest(testId, userAnswers, userId) {
     const test = await Test.findById(testId);
 
     if (!test) {
-      console.error("Test not found:", testId);
+      // Avoid console noise for normal not-found condition
       return { success: false, error: "Test not found" };
     }
 
-    console.log("Verifying test with Gemini...");
+    // Reduced console noise
     let geminiResult;
     try {
       geminiResult = await verifyTestWithGemini(test, userAnswers);
+      // Reduced console noise
     } catch (error) {
-      console.error("Error verifying test with Gemini:", error);
+      // Return structured error
       return { success: false, error: "Failed to verify test results" };
     }
-    console.log("Gemini result:", geminiResult);
 
     const questionsFormat = test.questions.map((question, index) => ({
       questionText: question.text,
@@ -76,7 +85,7 @@ export async function submitTest(testId, userAnswers, userId) {
       isCorrect: geminiResult.questionResults[index].isCorrect,
       explanation: geminiResult.questionResults[index].explanation,
     }));
-    console.log(questionsFormat);
+    // Removed debug print
 
     const testResult = new TestResult({
       userId: userId,
@@ -89,15 +98,22 @@ export async function submitTest(testId, userAnswers, userId) {
       questions: questionsFormat,
       userAnswers: userAnswers,
     });
-    console.log(testResult, "the result we are getting");
-
-    console.log("Saving test result...");
+    // Reduced console noise
     await testResult.save();
-    console.log("Test result saved successfully");
+    // Reduced console noise
+
+    // Award XP based on score and small time bonus; update streak/level
+    try {
+      const baseXP = Math.round(geminiResult.score); // 0-100
+      const timeBonus = 5; // simple constant bonus for completion
+      await awardXP(userId, baseXP + timeBonus, { reason: "test_completed" });
+    } catch (e) {
+      // Non-fatal; avoid noisy console
+    }
 
     return { success: true, resultId: testResult._id.toString() };
   } catch (error) {
-    console.error("Error submitting test:", error);
+    // Return structured error
     return { success: false, error: error.message || "Failed to submit test" };
   }
 }
@@ -143,7 +159,7 @@ export async function getTestResult(resultId, userId) {
       data: combinedData,
     };
   } catch (error) {
-    console.error("Error fetching test result:", error);
+    // Let caller handle error
     return { success: false, error: "Failed to fetch test result" };
   }
 }
@@ -152,21 +168,21 @@ export const getUserTests = async (userId) => {
   try {
     await dbConnect();
     const testResults = await TestResult.find({ userId: userId })
-      .populate("testId", "title") 
+      .populate("testId", "title")
       .sort({ createdAt: -1 });
 
     if (testResults.length === 0) {
-      console.warn("No test results found for user ID:", userId); 
+      // No console noise for empty state
     }
 
     return testResults.map((result) => ({
-      id: result._id.toString(), 
+      id: result._id.toString(),
       title: result.testId?.title || "Untitled Test",
       date: result.createdAt,
       score: result.score,
     }));
   } catch (error) {
-    console.error("Error fetching user tests:", error); 
+    // Let caller handle error
     return [];
   }
 };
@@ -188,11 +204,10 @@ export async function getAllTests() {
 
     return JSON.parse(JSON.stringify(tests));
   } catch (error) {
-    console.error("Error fetching all tests:", error);
+    // Throw for upstream handling
     throw new Error("Failed to fetch tests");
   }
 }
-
 
 export const getTestStats = async (userId) => {
   try {
@@ -217,9 +232,9 @@ export const getTestStats = async (userId) => {
       },
     ]);
 
-    const easyCount = stats.find(stat => stat._id === "easy")?.count || 0;
-    const mediumCount = stats.find(stat => stat._id === "medium")?.count || 0;
-    const hardCount = stats.find(stat => stat._id === "hard")?.count || 0;
+    const easyCount = stats.find((stat) => stat._id === "easy")?.count || 0;
+    const mediumCount = stats.find((stat) => stat._id === "medium")?.count || 0;
+    const hardCount = stats.find((stat) => stat._id === "hard")?.count || 0;
 
     return {
       easy: easyCount,
@@ -227,8 +242,7 @@ export const getTestStats = async (userId) => {
       hard: hardCount,
     };
   } catch (error) {
-    console.error("Error fetching test stats:", error);
+    // Let caller handle error
     return { easy: 0, medium: 0, hard: 0 };
   }
 };
-

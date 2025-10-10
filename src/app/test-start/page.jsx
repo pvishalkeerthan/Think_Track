@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
@@ -19,6 +19,7 @@ const TestStartPage = () => {
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [userPerformanceData, setUserPerformanceData] = useState(null);
   const [isClient, setIsClient] = useState(false);
+  const [aiServiceStatus, setAiServiceStatus] = useState("checking"); // 'checking', 'available', 'fallback'
   const router = useRouter();
 
   const [testDetails, setTestDetails] = useState({
@@ -38,10 +39,10 @@ const TestStartPage = () => {
   // Function to fetch user's performance data
   const fetchUserPerformance = async () => {
     try {
-      const res = await fetch('/api/user-performance', {
-        method: 'GET',
-        headers: { 
-          'Content-Type': 'application/json',
+      const res = await fetch("/api/user-performance", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
         },
       });
 
@@ -50,13 +51,13 @@ const TestStartPage = () => {
       }
 
       const data = await res.json();
-      console.log('User Performance Data:', data);
+      console.log("User Performance Data:", data);
 
       if (data.success) {
         setUserPerformanceData(data.data);
         return data.data;
       } else {
-        throw new Error('Invalid response format from performance API');
+        throw new Error("Invalid response format from performance API");
       }
     } catch (err) {
       console.error("Failed to fetch user performance:", err);
@@ -65,7 +66,7 @@ const TestStartPage = () => {
         averageTimePerQuestion: 45,
         totalTests: 0,
         difficultyPerformance: {},
-        performanceTrends: { improving: false, stable: true, declining: false }
+        performanceTrends: { improving: false, stable: true, declining: false },
       };
     }
   };
@@ -78,18 +79,20 @@ const TestStartPage = () => {
         score: performanceData.averageScore || 65,
         time_taken: performanceData.averageTimePerQuestion || 45,
         userId: session?.user?.id || null,
-        subject: testDetails.tags || 'general',
+        subject: testDetails.tags || "general",
         totalTests: performanceData.totalTests || 0,
         difficultyPerformance: performanceData.difficultyPerformance || {},
-        performanceTrends: performanceData.performanceTrends || { stable: true },
-        learningPattern: performanceData.learningPattern || 'balanced_learner',
-        recommendedDifficulty: performanceData.recommendedDifficulty
+        performanceTrends: performanceData.performanceTrends || {
+          stable: true,
+        },
+        learningPattern: performanceData.learningPattern || "balanced_learner",
+        recommendedDifficulty: performanceData.recommendedDifficulty,
       };
 
-      const res = await fetch('/api/predict-difficulty', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
+      const res = await fetch("/api/predict-difficulty", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(requestData),
       });
@@ -101,19 +104,22 @@ const TestStartPage = () => {
       const data = await res.json();
 
       if (data.success && data.predicted_difficulty) {
+        setAiServiceStatus("available");
         setTestDetails((prev) => ({
           ...prev,
           difficulty: data.predicted_difficulty.toLowerCase(),
         }));
-        
+
         // Show success message with confidence and reasoning
-        const confidenceText = data.confidence ? ` (${data.confidence}% confidence)` : '';
-        const reasoningText = data.suggestion ? ` - ${data.suggestion}` : '';
-        
+        const confidenceText = data.confidence
+          ? ` (${data.confidence}% confidence)`
+          : "";
+        const reasoningText = data.suggestion ? ` - ${data.suggestion}` : "";
+
         // Show toast with SSR safety
-        if (typeof window !== 'undefined') {
+        if (typeof window !== "undefined") {
           toast.success(
-            `AI suggested "${data.predicted_difficulty}" difficulty${confidenceText}${reasoningText}`, 
+            `AI suggested "${data.predicted_difficulty}" difficulty${confidenceText}${reasoningText}`,
             {
               position: "top-center",
               duration: 5000,
@@ -123,24 +129,31 @@ const TestStartPage = () => {
       }
     } catch (err) {
       console.error("AI prediction failed:", err);
+      setAiServiceStatus("fallback");
       const fallbackDifficulty = getFallbackDifficulty(performanceData);
       if (fallbackDifficulty !== testDetails.difficulty) {
         setTestDetails((prev) => ({
           ...prev,
           difficulty: fallbackDifficulty,
         }));
-        if (typeof window !== 'undefined') {
-          toast.success(`Based on your performance, we recommend "${fallbackDifficulty}" difficulty`, {
-            position: "top-center",
-            duration: 4000,
-          });
+        if (typeof window !== "undefined") {
+          toast.success(
+            `Based on your performance, we recommend "${fallbackDifficulty}" difficulty`,
+            {
+              position: "top-center",
+              duration: 4000,
+            }
+          );
         }
       } else {
-        if (typeof window !== 'undefined') {
-          toast.error("Failed to get AI difficulty suggestion. Using your current selection.", {
-            position: "top-center",
-            duration: 3000,
-          });
+        if (typeof window !== "undefined") {
+          toast.error(
+            "Failed to get AI difficulty suggestion. Using your current selection.",
+            {
+              position: "top-center",
+              duration: 3000,
+            }
+          );
         }
       }
     } finally {
@@ -169,9 +182,9 @@ const TestStartPage = () => {
 
   useEffect(() => {
     if (!isClient) return;
-    
+
     if (status === "unauthenticated") {
-      if (typeof window !== 'undefined') {
+      if (typeof window !== "undefined") {
         toast.error("Please log in to create a test", {
           duration: 3000,
           position: "top-center",
@@ -202,22 +215,38 @@ const TestStartPage = () => {
 
       if (response.success) {
         console.log("Test created successfully with ID:", response.testId);
-        if (typeof window !== 'undefined') {
-          toast.success("Test created successfully!", {
+        if (typeof window !== "undefined") {
+          toast.success(response.message || "Test created successfully!", {
             position: "top-center",
             duration: 3000,
           });
         }
         router.push(`/test/${response.testId}`);
       } else {
-        if (typeof window !== 'undefined') {
-          toast.error("Failed to create test. Please try again.");
+        if (typeof window !== "undefined") {
+          // Show more specific error messages
+          const errorMessage =
+            response.error || "Failed to create test. Please try again.";
+          toast.error(errorMessage, {
+            position: "top-center",
+            duration: 5000,
+          });
         }
       }
     } catch (error) {
       console.error("Error creating test:", error);
-      if (typeof window !== 'undefined') {
-        toast.error("An unexpected error occurred. Please try again.");
+      if (typeof window !== "undefined") {
+        // Check if it's an API-related error
+        const errorMessage =
+          error.message?.includes("overloaded") ||
+          error.message?.includes("503")
+            ? "AI service is temporarily busy. Your test will use fallback questions."
+            : "An unexpected error occurred. Please try again.";
+
+        toast.error(errorMessage, {
+          position: "top-center",
+          duration: 5000,
+        });
       }
     }
 
@@ -247,7 +276,9 @@ const TestStartPage = () => {
     return (
       <div className="flex flex-col items-center justify-center h-screen w-screen bg-white dark:bg-black fixed top-0 left-0 z-50">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
-        <p className="mt-4 text-lg text-gray-800 dark:text-white">Creating test...</p>
+        <p className="mt-4 text-lg text-gray-800 dark:text-white">
+          Creating test...
+        </p>
       </div>
     );
   }
@@ -255,43 +286,92 @@ const TestStartPage = () => {
   return (
     <div className="container mx-auto max-w-2xl p-6">
       <Link href="/dashboard" className="right-4 z-10 flex justify-end">
-        <Button variant="secondary" className="bg-black text-white dark:bg-white dark:text-black">
+        <Button
+          variant="secondary"
+          className="bg-black text-white dark:bg-white dark:text-black"
+        >
           Back to Dashboard
         </Button>
       </Link>
 
       <div className="bg-white dark:bg-black border dark:border-zinc-800 shadow-lg rounded-lg p-6 mt-12">
         <h1 className="text-3xl font-bold mb-6">Initialize Test</h1>
-        
+
+        {/* AI Service Status Indicator */}
+        <div className="mb-6 p-3 rounded-lg border-l-4 border-l-blue-500 bg-blue-50 dark:bg-blue-900/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div
+                className={`w-2 h-2 rounded-full mr-2 ${
+                  aiServiceStatus === "checking"
+                    ? "bg-yellow-500 animate-pulse"
+                    : aiServiceStatus === "available"
+                    ? "bg-green-500"
+                    : "bg-orange-500"
+                }`}
+              ></div>
+              <span className="text-sm font-medium">
+                {aiServiceStatus === "checking"
+                  ? "Checking AI service..."
+                  : aiServiceStatus === "available"
+                  ? "AI service available"
+                  : "Using fallback mode"}
+              </span>
+            </div>
+            {aiServiceStatus === "fallback" && (
+              <span className="text-xs text-orange-600 dark:text-orange-400">
+                AI temporarily unavailable
+              </span>
+            )}
+          </div>
+        </div>
+
         {userPerformanceData && userPerformanceData.totalTests > 0 && (
           <div className="mb-6 p-4 bg-gray-50 dark:bg-neutral-900 rounded-lg">
-            <h3 className="text-lg font-semibold mb-2">Your Performance Summary</h3>
+            <h3 className="text-lg font-semibold mb-2">
+              Your Performance Summary
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
               <div>
-                <span className="text-gray-600 dark:text-gray-400">Average Score:</span>
-                <p className="font-medium">{userPerformanceData.averageScore?.toFixed(1)}%</p>
+                <span className="text-gray-600 dark:text-gray-400">
+                  Average Score:
+                </span>
+                <p className="font-medium">
+                  {userPerformanceData.averageScore?.toFixed(1)}%
+                </p>
               </div>
               <div>
-                <span className="text-gray-600 dark:text-gray-400">Tests Taken:</span>
+                <span className="text-gray-600 dark:text-gray-400">
+                  Tests Taken:
+                </span>
                 <p className="font-medium">{userPerformanceData.totalTests}</p>
               </div>
               <div>
-                <span className="text-gray-600 dark:text-gray-400">Avg Time/Question:</span>
-                <p className="font-medium">{userPerformanceData.averageTimePerQuestion}s</p>
+                <span className="text-gray-600 dark:text-gray-400">
+                  Avg Time/Question:
+                </span>
+                <p className="font-medium">
+                  {userPerformanceData.averageTimePerQuestion}s
+                </p>
               </div>
             </div>
             {userPerformanceData.performanceTrends && (
               <div className="mt-2">
                 <span className="text-gray-600 dark:text-gray-400">Trend:</span>
-                <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
-                  userPerformanceData.performanceTrends.improving 
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                    : userPerformanceData.performanceTrends.declining 
-                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                }`}>
-                  {userPerformanceData.performanceTrends.improving ? 'Improving' : 
-                   userPerformanceData.performanceTrends.declining ? 'Needs Focus' : 'Stable'}
+                <span
+                  className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
+                    userPerformanceData.performanceTrends.improving
+                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                      : userPerformanceData.performanceTrends.declining
+                      ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                      : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                  }`}
+                >
+                  {userPerformanceData.performanceTrends.improving
+                    ? "Improving"
+                    : userPerformanceData.performanceTrends.declining
+                    ? "Needs Focus"
+                    : "Stable"}
                 </span>
               </div>
             )}
@@ -366,15 +446,18 @@ const TestStartPage = () => {
               <option value="hard">Hard</option>
             </select>
             <p className="text-sm text-gray-500 mt-1">
-              {isLoadingAI ? "AI is analyzing your performance..." : 
-               userPerformanceData && userPerformanceData.totalTests > 0 ? 
-               "AI recommendation based on your test history." : 
-               "Default difficulty for new users."}
+              {isLoadingAI
+                ? "AI is analyzing your performance..."
+                : userPerformanceData && userPerformanceData.totalTests > 0
+                ? "AI recommendation based on your test history."
+                : "Default difficulty for new users."}
             </p>
           </div>
 
           <div>
-            <Label htmlFor="timeLimit">Time Limit (minutes): {testDetails.timeLimit}</Label>
+            <Label htmlFor="timeLimit">
+              Time Limit (minutes): {testDetails.timeLimit}
+            </Label>
             <input
               type="range"
               id="timeLimit"
@@ -404,11 +487,7 @@ const TestStartPage = () => {
             />
           </div>
 
-          <Button 
-            type="submit" 
-            className="w-full"
-            disabled={isLoading}
-          >
+          <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? "Creating test..." : "Create Test With AI"}
           </Button>
         </form>

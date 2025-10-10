@@ -66,16 +66,12 @@ export default function QuizPage() {
         ...answers,
         { questionIndex: currentQ, selected, isCorrect, timeSpent },
       ]);
-      
+
       setSelected("");
       setCurrentQ((prev) => prev + 1);
       setStartTime(Date.now());
-      
-      if (isCorrect) {
-        toast.success("Correct answer!");
-      } else {
-        toast.error("Incorrect answer");
-      }
+
+      // Remove individual answer feedback toasts - only show final completion message
     } catch (err) {
       toast.error("Failed to submit answer. Please try again.");
     } finally {
@@ -112,28 +108,55 @@ export default function QuizPage() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg p-8 text-center">
           <div className="text-red-500 text-5xl mb-4">⚠️</div>
-          <p className="text-gray-700 font-medium">No questions found for this quiz.</p>
+          <p className="text-gray-700 font-medium">
+            No questions found for this quiz.
+          </p>
         </div>
       </div>
     );
   }
 
-  const question = room.questions[currentQ];
-  const progress = ((currentQ) / room.questions.length) * 100;
-
+  // If all questions are answered, show completion before accessing current question
   if (currentQ >= room.questions.length) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg p-8 text-center max-w-md">
           <div className="text-green-500 text-6xl mb-6">🎉</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Quiz Complete!</h2>
-          <p className="text-gray-600 mb-6">Great job! You've answered all questions.</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">
+            Quiz Complete!
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Great job! You've answered all questions.
+          </p>
           <button
             className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg"
             onClick={handleFinish}
           >
             View Results
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  const question = room.questions[currentQ];
+  const progress = (currentQ / room.questions.length) * 100;
+
+  // Removed noisy debug logging
+
+  // Safety check - if question doesn't exist or is malformed
+  if (!question || !question.text) {
+    // Keep UI feedback; avoid console noise
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center">
+        <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <p className="text-gray-700 font-medium">
+            Question data is missing or corrupted.
+          </p>
+          <p className="text-gray-600 text-sm mt-2">
+            Please try refreshing the page or contact support.
+          </p>
         </div>
       </div>
     );
@@ -153,7 +176,7 @@ export default function QuizPage() {
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
+            <div
               className="bg-indigo-600 h-2 rounded-full transition-all duration-300 ease-out"
               style={{ width: `${progress}%` }}
             ></div>
@@ -162,7 +185,7 @@ export default function QuizPage() {
 
         {/* Question Card */}
         <div className="bg-white rounded-xl shadow-md p-8">
-          <h3 className="text-lg font-semibold text-gray-800 mb-6 leading-relaxed">
+          <h3 className="text-xl font-bold text-gray-800 mb-6 leading-relaxed">
             {question.text}
           </h3>
 
@@ -184,11 +207,13 @@ export default function QuizPage() {
                   onChange={(e) => setSelected(e.target.value)}
                   className="sr-only"
                 />
-                <div className={`w-5 h-5 rounded-full border-2 mr-4 flex items-center justify-center ${
-                  selected === option
-                    ? "border-indigo-500 bg-indigo-500"
-                    : "border-gray-300"
-                }`}>
+                <div
+                  className={`w-5 h-5 rounded-full border-2 mr-4 flex items-center justify-center ${
+                    selected === option
+                      ? "border-indigo-500 bg-indigo-500"
+                      : "border-gray-300"
+                  }`}
+                >
                   {selected === option && (
                     <div className="w-2 h-2 bg-white rounded-full"></div>
                   )}

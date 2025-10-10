@@ -1,9 +1,9 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const ParticipantSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: "User",
     required: true,
   },
   name: {
@@ -36,7 +36,7 @@ const RoomSchema = new mongoose.Schema(
   {
     hostId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: "User",
       required: true,
     },
     roomCode: {
@@ -50,7 +50,7 @@ const RoomSchema = new mongoose.Schema(
       numQuestions: Number,
       difficulty: {
         type: String,
-        enum: ['easy', 'medium', 'hard'],
+        enum: ["easy", "medium", "hard"],
       },
       timeLimit: Number,
     },
@@ -64,8 +64,8 @@ const RoomSchema = new mongoose.Schema(
     participants: [ParticipantSchema],
     status: {
       type: String,
-      enum: ['waiting', 'active', 'completed'],
-      default: 'waiting',
+      enum: ["waiting", "active", "completed"],
+      default: "waiting",
     },
     startedAt: Date,
     endedAt: Date,
@@ -73,6 +73,6 @@ const RoomSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const Room = mongoose.models.Room || mongoose.model('Room', RoomSchema);
+const Room = mongoose.models.Room || mongoose.model("Room", RoomSchema);
 
 module.exports = Room;

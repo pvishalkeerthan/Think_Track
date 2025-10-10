@@ -32,34 +32,33 @@ const TestResultSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    // Enhanced timing fields for better AI predictions
+
+    // Timing fields — optional for partial results or debugging
     timeStarted: {
       type: Date,
-      required: true,
     },
     timeCompleted: {
       type: Date,
-      required: true,
     },
     totalTimeSpent: {
       type: Number, // in seconds
-      required: true,
     },
     averageTimePerQuestion: {
       type: Number, // in seconds
-      required: true,
     },
-    // Track time spent on each question for detailed analysis
-    questionTimings: [{
-      questionIndex: {
-        type: Number,
-        required: true,
+
+    // Optional per-question timing breakdown
+    questionTimings: [
+      {
+        questionIndex: {
+          type: Number,
+        },
+        timeSpent: {
+          type: Number, // in seconds
+        },
       },
-      timeSpent: {
-        type: Number, // in seconds
-        required: true,
-      },
-    }],
+    ],
+
     questions: [
       {
         questionText: {
@@ -86,30 +85,29 @@ const TestResultSchema = new mongoose.Schema(
           type: String,
           required: true,
         },
-        // Time spent on this specific question
         timeSpent: {
           type: Number, // in seconds
           default: 0,
         },
       },
     ],
+
     userAnswers: {
       type: Map,
       of: String,
       required: true,
     },
-    // Additional performance metrics
+
+    // Optional: Generated after calculation
     performanceMetrics: {
       accuracyRate: {
         type: Number, // percentage
-        required: true,
       },
       speedScore: {
         type: Number, // questions per minute
-        required: true,
       },
       consistencyScore: {
-        type: Number, // how consistent timing was across questions
+        type: Number,
         default: 0,
       },
     },
@@ -117,33 +115,32 @@ const TestResultSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Add indexes for better query performance
+// Indexes
 TestResultSchema.index({ userId: 1, createdAt: -1 });
 TestResultSchema.index({ userId: 1, difficulty: 1 });
 
-// Add a method to calculate performance metrics
-TestResultSchema.methods.calculatePerformanceMetrics = function() {
+// Metric calculation method
+TestResultSchema.methods.calculatePerformanceMetrics = function () {
   const totalQuestions = this.correctAnswers + this.wrongAnswers;
   const accuracyRate = (this.correctAnswers / totalQuestions) * 100;
   const speedScore = totalQuestions / (this.totalTimeSpent / 60); // questions per minute
-  
-  // Calculate consistency (lower standard deviation = more consistent)
-  const timings = this.questions.map(q => q.timeSpent || 0).filter(t => t > 0);
-  let consistencyScore = 100; // Default high consistency
-  
+
+  const timings = this.questions.map((q) => q.timeSpent || 0).filter((t) => t > 0);
+  let consistencyScore = 100;
+
   if (timings.length > 1) {
     const avgTime = timings.reduce((sum, time) => sum + time, 0) / timings.length;
     const variance = timings.reduce((sum, time) => sum + Math.pow(time - avgTime, 2), 0) / timings.length;
     const stdDev = Math.sqrt(variance);
     consistencyScore = Math.max(0, 100 - (stdDev / avgTime) * 100);
   }
-  
+
   this.performanceMetrics = {
     accuracyRate: Math.round(accuracyRate * 100) / 100,
     speedScore: Math.round(speedScore * 100) / 100,
     consistencyScore: Math.round(consistencyScore * 100) / 100,
   };
-  
+
   return this.performanceMetrics;
 };
 

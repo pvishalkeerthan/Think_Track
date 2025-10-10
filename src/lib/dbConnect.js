@@ -24,9 +24,8 @@ async function dbConnect() {
       bufferCommands: false,
     };
 
-    console.log("Connecting to MongoDB...");
+    // Avoid noisy logs in production
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
-      console.log("Connected to MongoDB");
       return mongoose;
     });
   }
@@ -35,7 +34,7 @@ async function dbConnect() {
     cached.conn = await cached.promise;
   } catch (e) {
     cached.promise = null;
-    console.error("Failed to connect to MongoDB:", e);
+    // Re-throw but avoid extra console noise here
     throw e;
   }
 
