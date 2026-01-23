@@ -91,7 +91,11 @@ function RoadmapContent() {
 
       const data = await response.json();
       setResources(data.content);
-      setTimeout(() => setConfettiExplode(true), 500);
+      setTimeout(() => {
+        setConfettiExplode(true);
+        // Auto-hide after 2 seconds
+        setTimeout(() => setConfettiExplode(false), 2000);
+      }, 500);
     } catch (error) {
       console.error("Error generating resources:", error);
       alert("Error generating resources");
@@ -385,14 +389,14 @@ function RoadmapContent() {
                           ))}
                         </div>
 
-                        {course.url && (
+                        {(course.courseUrl || course.url) && (
                           <a
-                            href={course.url}
+                            href={course.courseUrl || course.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                            className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-md hover:shadow-lg font-medium"
                           >
-                            View Course
+                            <span>View on {course.platform || "Platform"}</span>
                             <svg
                               className="ml-2 w-4 h-4"
                               fill="none"
@@ -422,8 +426,8 @@ function RoadmapContent() {
             ) : resources ? (
               <div className="prose max-w-none">
                 {confettiExplode && (
-                  <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-                    <div className="text-6xl">🎉</div>
+                  <div className="fixed top-4 right-4 pointer-events-none z-50 animate-bounce">
+                    <div className="text-4xl bg-white rounded-full p-3 shadow-lg">🎉</div>
                   </div>
                 )}
                 <div className="bg-gray-50 p-4 rounded-lg mb-4">
