@@ -80,7 +80,7 @@ async function tryGroqFallback(prompt, systemInstruction, modelConfig) {
 
     // Try different Groq models in order
     const groqModels = [
-      "llama-3.1-70b-versatile",  // Best quality
+      "llama-3.1-70b-instruct",  // Best quality (updated from decommissioned versatile)
       "llama-3.1-8b-instant",    // Fast fallback
       "mixtral-8x7b-32768",      // Alternative
     ];

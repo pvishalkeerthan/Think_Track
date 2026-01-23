@@ -4,6 +4,14 @@ import { recordUsage, getRemaining } from "./quota";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+// Try to import Groq SDK (optional fallback)
+let Groq;
+try {
+  Groq = require('groq-sdk');
+} catch (e) {
+  logger.warn("Groq SDK not installed. Install with: npm install groq-sdk");
+}
+
 // Retry configuration
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2 seconds
@@ -94,8 +102,113 @@ function logRateLimitInfo(note) {
   }
 }
 
+// Helper function to check if error is retryable (quota, rate limit, or service unavailable)
+function isRetryableError(error) {
+  if (!error) return false;
+  
+  const status = error.status || error.statusCode;
+  const message = error.message || '';
+  
+  // Check for retryable HTTP status codes
+  if (status === 429 || status === 503 || status === 500 || status === 502) {
+    return true;
+  }
+  
+  // Check error message for quota/overload-related keywords
+  const retryableKeywords = [
+    'quota',
+    'rate limit',
+    'too many requests',
+    'exceeded',
+    'limit: 0',
+    'overloaded',
+    'service unavailable',
+    'try again later'
+  ];
+  
+  return retryableKeywords.some(keyword => 
+    message.toLowerCase().includes(keyword.toLowerCase())
+  );
+}
+
+// Helper function to try Groq API as final fallback
+async function tryGroqFallback(prompt, systemInstruction = null) {
+  if (!Groq || !process.env.GROQ_API_KEY) {
+    return null;
+  }
+
+  try {
+    logger.info("🔄 All Gemini models failed, trying Groq API as final fallback...");
+    
+    const groq = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
+
+    const messages = [];
+    if (systemInstruction) {
+      messages.push({
+        role: "system",
+        content: systemInstruction,
+      });
+    }
+    messages.push({
+      role: "user",
+      content: prompt,
+    });
+
+    // Try different Groq models in order
+    const groqModels = [
+      "llama-3.1-70b-instruct",  // Best quality (updated from decommissioned versatile)
+      "llama-3.1-8b-instant",    // Fast fallback
+      "mixtral-8x7b-32768",      // Alternative
+    ];
+
+    for (const model of groqModels) {
+      try {
+        logger.info(`Attempting Groq model: ${model}`);
+        
+        const completion = await groq.chat.completions.create({
+          messages,
+          model,
+          temperature: 0.7,
+          max_tokens: 4096,
+          response_format: { type: "json_object" }, // Force JSON for questions
+        });
+
+        const text = completion.choices[0]?.message?.content;
+        if (text) {
+          logger.info(`✅ Successfully generated with Groq model: ${model}`);
+          return text;
+        }
+      } catch (groqError) {
+        logger.warn(`❌ Groq model ${model} failed:`, groqError.message);
+        if (model !== groqModels[groqModels.length - 1]) {
+          continue; // Try next Groq model
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    logger.error("Groq API fallback failed:", error.message);
+    return null;
+  }
+}
+
 export async function generateQuestions(testDetails) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+  // Fallback models in order of preference
+  const FALLBACK_MODELS = [
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+    'gemini-2.0-flash-001',
+    'gemini-2.5-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro',
+    'gemini-2.0-flash-lite',
+  ];
+
+  const systemInstruction = `You are an expert educational assessment specialist. Generate high-quality multiple-choice questions that test both factual knowledge and conceptual understanding.`;
 
   const prompt = `Generate ${testDetails.numQuestions} multiple-choice questions for a ${testDetails.difficulty} level test on ${testDetails.tags}. 
   The test title is "${testDetails.title}" and the description is "${testDetails.description}". 
@@ -107,51 +220,78 @@ export async function generateQuestions(testDetails) {
   Format the response as a JSON array of objects, each containing 'text', 'options', and 'correctAnswer'. 
   Do not include any markdown formatting or additional text outside of the JSON array.`;
 
-  try {
-    // Try with retry logic
-    const result = await retryWithBackoff(async () => {
+  let lastError = null;
+
+  // Try multiple Gemini models
+  for (let i = 0; i < FALLBACK_MODELS.length; i++) {
+    const modelName = FALLBACK_MODELS[i];
+    
+    try {
+      logger.info(`Attempting to generate with model: ${modelName}`);
+      
+      const model = genAI.getGenerativeModel({ model: modelName });
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      return await response.text();
-    });
+      const text = response.text();
 
-    // Clean and validate the response
-    const cleanedText = result.trim();
-    const parsedQuestions = cleanAndParseJSON(cleanedText);
+      // Clean and validate the response
+      const cleanedText = text.trim();
+      const parsedQuestions = cleanAndParseJSON(cleanedText);
 
-    // Check if parsedQuestions is a valid array
-    if (!Array.isArray(parsedQuestions) || parsedQuestions.length === 0) {
-      throw new Error("Invalid question format from API");
+      // Check if parsedQuestions is a valid array
+      if (!Array.isArray(parsedQuestions) || parsedQuestions.length === 0) {
+        throw new Error("Invalid question format from API");
+      }
+
+      recordUsage("gemini", 1);
+      logger.info(`✅ Successfully generated questions using ${modelName}`);
+      logRateLimitInfo();
+      return parsedQuestions;
+      
+    } catch (error) {
+      lastError = error;
+      const status = error.status || error.statusCode;
+      logger.warn(`❌ Model ${modelName} failed:`, error.message, `(Status: ${status})`);
+      
+      // If it's a retryable error and there are more models to try, continue
+      if (isRetryableError(error) && i < FALLBACK_MODELS.length - 1) {
+        const errorType = status === 429 ? 'quota exceeded' : status === 503 ? 'overloaded' : 'service error';
+        logger.info(`🔄 Model ${modelName} ${errorType}, trying next model...`);
+        continue;
+      }
+      
+      // If it's not a retryable error, throw immediately
+      if (!isRetryableError(error)) {
+        break; // Exit loop to try Groq or fallback
+      }
     }
-
-    recordUsage("gemini", 1);
-    logger.info("✅ Successfully generated questions using Gemini API");
-    logRateLimitInfo();
-    return parsedQuestions;
-  } catch (error) {
-    logger.error("❌ Gemini API failed:", error.message);
-
-    // Check if it's a service unavailability error
-    if (
-      error.status === 503 ||
-      error.message.includes("overloaded") ||
-      error.message.includes("Service Unavailable")
-    ) {
-      logger.warn("🔄 Gemini API is overloaded, using fallback questions...");
-
-      const fallbackQuestions = generateFallbackQuestions(testDetails);
-      logger.info("✅ Generated fallback questions");
-
-      return fallbackQuestions;
-    }
-
-    // For other errors, also use fallback
-    logger.warn("🔄 API error occurred, using fallback questions...");
-    const fallbackQuestions = generateFallbackQuestions(testDetails);
-    logger.info("✅ Generated fallback questions");
-
-    return fallbackQuestions;
   }
+
+  // If we get here, all Gemini models failed with retryable errors
+  // Try Groq as final fallback
+  if (isRetryableError(lastError)) {
+    logger.info("🔄 All Gemini models failed, trying Groq API...");
+    const groqResponse = await tryGroqFallback(prompt, systemInstruction);
+    if (groqResponse) {
+      try {
+        const cleanedText = groqResponse.trim();
+        const parsedQuestions = cleanAndParseJSON(cleanedText);
+        
+        if (Array.isArray(parsedQuestions) && parsedQuestions.length > 0) {
+          logger.info("✅ Successfully generated questions using Groq API");
+          return parsedQuestions;
+        }
+      } catch (parseError) {
+        logger.warn("Failed to parse Groq response:", parseError.message);
+      }
+    }
+  }
+
+  // Final fallback: use hardcoded questions
+  logger.warn("🔄 All AI APIs failed, using fallback questions...");
+  const fallbackQuestions = generateFallbackQuestions(testDetails);
+  logger.info("✅ Generated fallback questions");
+  return fallbackQuestions;
 }
 
 // Fallback test verification
@@ -228,31 +368,78 @@ export async function verifyTestWithGemini(test, userAnswers) {
     }
   `;
 
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
+  // Fallback models in order of preference
+  const FALLBACK_MODELS = [
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+    'gemini-2.0-flash-001',
+    'gemini-2.5-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro',
+    'gemini-2.0-flash-lite',
+  ];
 
-    // Try with retry logic
-    const result = await retryWithBackoff(async () => {
+  let lastError = null;
+
+  // Try multiple Gemini models
+  for (let i = 0; i < FALLBACK_MODELS.length; i++) {
+    const modelName = FALLBACK_MODELS[i];
+    
+    try {
+      logger.info(`Attempting to verify with model: ${modelName}`);
+      
+      const model = genAI.getGenerativeModel({ model: modelName });
       const result = await model.generateContent(prompt);
       const response = await result.response;
-      return await response.text();
-    });
+      const text = response.text();
 
-    logger.debug("Gemini API response:", result);
-    const parsedResult = cleanAndParseJSON(result);
+      logger.debug("API response:", text);
+      const parsedResult = cleanAndParseJSON(text);
 
-    recordUsage("gemini", 1);
-    logger.info("✅ Successfully verified test using Gemini API");
-    logRateLimitInfo();
-    return parsedResult;
-  } catch (error) {
-    logger.error("❌ Gemini API failed for test verification:", error.message);
-
-    // Use fallback verification
-    logger.warn("🔄 Using fallback test verification...");
-    const fallbackResult = generateFallbackTestVerification(test, userAnswers);
-    logger.info("✅ Generated fallback test verification");
-
-    return fallbackResult;
+      recordUsage("gemini", 1);
+      logger.info(`✅ Successfully verified test using ${modelName}`);
+      logRateLimitInfo();
+      return parsedResult;
+      
+    } catch (error) {
+      lastError = error;
+      const status = error.status || error.statusCode;
+      logger.warn(`❌ Model ${modelName} failed:`, error.message, `(Status: ${status})`);
+      
+      // If it's a retryable error and there are more models to try, continue
+      if (isRetryableError(error) && i < FALLBACK_MODELS.length - 1) {
+        const errorType = status === 429 ? 'quota exceeded' : status === 503 ? 'overloaded' : 'service error';
+        logger.info(`🔄 Model ${modelName} ${errorType}, trying next model...`);
+        continue;
+      }
+      
+      // If it's not a retryable error, break to try Groq or fallback
+      if (!isRetryableError(error)) {
+        break;
+      }
+    }
   }
+
+  // If we get here, all Gemini models failed with retryable errors
+  // Try Groq as final fallback
+  if (isRetryableError(lastError)) {
+    logger.info("🔄 All Gemini models failed, trying Groq API...");
+    const groqResponse = await tryGroqFallback(prompt, "You are an expert educational assessment analyzer.");
+    if (groqResponse) {
+      try {
+        const parsedResult = cleanAndParseJSON(groqResponse);
+        logger.info("✅ Successfully verified test using Groq API");
+        return parsedResult;
+      } catch (parseError) {
+        logger.warn("Failed to parse Groq response:", parseError.message);
+      }
+    }
+  }
+
+  // Final fallback: use hardcoded verification
+  logger.warn("🔄 All AI APIs failed, using fallback test verification...");
+  const fallbackResult = generateFallbackTestVerification(test, userAnswers);
+  logger.info("✅ Generated fallback test verification");
+  return fallbackResult;
 }
