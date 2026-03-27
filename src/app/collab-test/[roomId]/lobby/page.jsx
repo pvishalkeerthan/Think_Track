@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Loader2, Users, Home, Play, Timer } from "lucide-react";
 
 export default function LobbyPage() {
   const { roomId } = useParams();
@@ -89,65 +92,61 @@ export default function LobbyPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 flex items-center justify-center">
-        <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading Room...</p>
-        </div>
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   if (!room) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 flex items-center justify-center">
-        <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-          <div className="text-red-500 text-5xl mb-4">❌</div>
-          <p className="text-gray-700 font-medium">Room not found or failed to load.</p>
-        </div>
+      <div className="container mx-auto max-w-2xl px-6 py-20 text-center">
+        <div className="text-destructive text-5xl mb-4">❌</div>
+        <p className="text-muted-foreground font-medium">Room not found or failed to load.</p>
+        <Button className="mt-4" onClick={() => router.push('/collab-test/join')}>Back to Join</Button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 py-8 px-4">
-      <div className="max-w-2xl mx-auto">
-        {/* Room Header */}
-        <div className="bg-white rounded-xl shadow-md p-8 mb-6 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-4">
-            <span className="text-2xl">🏠</span>
+    <div className="container mx-auto max-w-2xl px-6 py-12">
+      {/* Room Header */}
+      <Card className="mb-6 border shadow-sm">
+        <CardHeader className="text-center">
+          <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-4 border">
+            <Home className="w-6 h-6 text-muted-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Room: {room.roomCode}</h1>
-          <p className="text-gray-600 font-medium">Waiting for participants to join...</p>
-        </div>
+          <CardTitle className="text-3xl font-bold">Room: {room.roomCode}</CardTitle>
+          <CardDescription>Waiting for participants to join...</CardDescription>
+        </CardHeader>
+      </Card>
 
-        {/* Participants List */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-            <span className="mr-2">👥</span>
+      {/* Participants List */}
+      <Card className="mb-6 border shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Users className="w-5 h-5" />
             Participants ({room.participants.length})
-          </h2>
-          
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
           {room.participants.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="text-gray-400 text-4xl mb-2">👤</div>
-              <p className="text-gray-500">No participants yet</p>
+            <div className="text-center py-8 text-muted-foreground">
+              No participants yet
             </div>
           ) : (
-            <div className="grid gap-3">
+            <div className="grid gap-2">
               {room.participants.map((participant, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center p-3 bg-gray-50 rounded-lg border"
+                  className="flex items-center p-3 bg-muted/30 rounded-lg border gap-3"
                 >
-                  <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                    <span className="text-purple-600 font-semibold">
-                      {participant.name.charAt(0).toUpperCase()}
-                    </span>
+                  <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center border font-bold text-xs">
+                    {participant.name.charAt(0).toUpperCase()}
                   </div>
-                  <span className="font-medium text-gray-800">{participant.name}</span>
+                  <span className="font-medium">{participant.name}</span>
                   {isHost && idx === 0 && (
-                    <span className="ml-auto bg-purple-100 text-purple-800 text-xs font-semibold px-2 py-1 rounded-full">
+                    <span className="ml-auto text-[10px] font-bold uppercase px-2 py-0.5 bg-primary text-primary-foreground rounded">
                       Host
                     </span>
                   )}
@@ -155,47 +154,47 @@ export default function LobbyPage() {
               ))}
             </div>
           )}
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Start Button */}
-        {isHost && (
-          <div className="bg-white rounded-xl shadow-md p-6 text-center">
-            <p className="text-gray-600 mb-4">
-              Ready to begin? Make sure all participants have joined.
-            </p>
-            <button
-              onClick={handleStart}
-              disabled={starting || room.participants.length === 0}
-              className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 ${
-                starting || room.participants.length === 0
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg"
-              }`}
-            >
-              {starting ? (
-                <div className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Starting...
-                </div>
-              ) : (
-                <>
-                  <span className="mr-2">🚀</span>
-                  Start Quiz
-                </>
-              )}
-            </button>
-          </div>
-        )}
-
-        {!isHost && (
-          <div className="bg-white rounded-xl shadow-md p-6 text-center">
-            <div className="text-4xl mb-4">⏳</div>
-            <p className="text-gray-600 font-medium">
-              Waiting for the host to start the quiz...
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Status Section */}
+      <Card className="border shadow-sm">
+        <CardContent className="pt-6 text-center">
+          {isHost ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Ready to begin? Make sure all participants have joined.
+              </p>
+              <Button
+                onClick={handleStart}
+                disabled={starting || room.participants.length === 0}
+                className="w-full h-12 text-lg"
+              >
+                {starting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  <>
+                    <Play className="mr-2 h-4 w-4" />
+                    Start Quiz
+                  </>
+                )}
+              </Button>
+            </div>
+          ) : (
+            <div className="py-4 space-y-4">
+              <div className="mx-auto w-12 h-12 flex items-center justify-center">
+                <Timer className="w-8 h-8 animate-pulse text-muted-foreground" />
+              </div>
+              <p className="text-muted-foreground font-medium">
+                Waiting for the host to start the quiz...
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

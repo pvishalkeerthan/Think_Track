@@ -1,9 +1,10 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import Doubt from "@/models/Doubt";
 import User from "@/models/user.model";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from '@/lib/authOptions';
 
 export async function POST(req, { params }) {
   await dbConnect();

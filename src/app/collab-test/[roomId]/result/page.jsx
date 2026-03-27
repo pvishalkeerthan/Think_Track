@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { toast } from "react-hot-toast";
 
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+
 export default function ResultPage() {
   const { roomId } = useParams();
   const [loading, setLoading] = useState(true);
@@ -61,100 +65,80 @@ export default function ResultPage() {
       case 3:
         return "🥉";
       default:
-        return "🏅";
-    }
-  };
-
-  const getRankColor = (position) => {
-    switch (position) {
-      case 1:
-        return "from-yellow-400 to-yellow-600";
-      case 2:
-        return "from-gray-300 to-gray-500";
-      case 3:
-        return "from-orange-400 to-orange-600";
-      default:
-        return "from-blue-400 to-blue-600";
+        return "";
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-100 flex items-center justify-center">
-        <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading Results...</p>
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <p className="text-muted-foreground font-medium">Loading Results...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-100 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">
-            🏆 Quiz Results
-          </h1>
-          <p className="text-gray-600">See how everyone performed!</p>
-        </div>
+    <div className="container mx-auto max-w-4xl px-6 py-12">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-extrabold mb-2 tracking-tight">Quiz Results</h1>
+        <p className="text-muted-foreground">Final performance breakdown</p>
+      </div>
 
-        {/* User's Performance Card */}
-        {userStats && (
-          <div
-            className={`bg-gradient-to-r ${getRankColor(
-              rank
-            )} rounded-xl shadow-lg p-6 mb-8 text-white`}
-          >
-            <div className="text-center">
-              <div className="text-6xl mb-2">{getRankEmoji(rank)}</div>
-              <h2 className="text-2xl font-bold mb-2">Your Result</h2>
-              <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
-                <div className="bg-white/20 rounded-lg p-3">
-                  <div className="text-2xl font-bold">{rank}</div>
-                  <div className="text-sm opacity-90">Rank</div>
-                </div>
-                <div className="bg-white/20 rounded-lg p-3">
-                  <div className="text-2xl font-bold">{userStats.score}</div>
-                  <div className="text-sm opacity-90">Score</div>
-                </div>
-                <div className="bg-white/20 rounded-lg p-3">
-                  <div className="text-2xl font-bold">
-                    {userStats.totalTime || "0"}s
-                  </div>
-                  <div className="text-sm opacity-90">Time</div>
-                </div>
+      {userStats && (
+        <Card className="mb-12 border shadow-sm overflow-hidden">
+          <CardHeader className="text-center border-b bg-muted/30 py-8">
+            <div className="text-5xl mb-4">{getRankEmoji(rank)}</div>
+            <CardTitle className="text-2xl">Your Performance: Rank #{rank}</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-10 pb-10">
+            <div className="grid grid-cols-3 gap-8 text-center">
+              <div className="space-y-1">
+                <div className="text-4xl font-bold text-primary">{userStats.score}%</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold">Accuracy</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-4xl font-bold text-primary">{userStats.totalTime || "0"}s</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold">Time Taken</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-4xl font-bold text-primary">#{rank}</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold">Position</div>
               </div>
             </div>
-          </div>
-        )}
+            
+            <div className="mt-10 flex flex-col sm:flex-row justify-center gap-4">
+              <Link href="/dashboard" className="w-full sm:w-auto">
+                <Button variant="default" className="w-full px-8">Go to Dashboard</Button>
+              </Link>
+              <Link href="/collab-test/join" className="w-full sm:w-auto">
+                <Button variant="outline" className="w-full px-8">Join Another Room</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Leaderboard */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          <div className="bg-gray-50 px-6 py-4 border-b">
-            <h2 className="text-xl font-bold text-gray-800">🏅 Leaderboard</h2>
-          </div>
-
+      <Card className="border shadow-sm overflow-hidden">
+        <CardHeader className="bg-muted/30 border-b">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
+            <span>Leaderboard</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-100">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-muted/50 text-muted-foreground font-medium border-b uppercase text-[10px] tracking-wider">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 uppercase tracking-wider">
-                    Rank
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600 uppercase tracking-wider">
-                    Participant
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600 uppercase tracking-wider">
-                    Score
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600 uppercase tracking-wider">
-                    Time (s)
-                  </th>
+                  <th className="px-6 py-4">Rank</th>
+                  <th className="px-6 py-4">Participant</th>
+                  <th className="px-6 py-4 text-center">Score</th>
+                  <th className="px-6 py-4 text-center">Time (s)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y">
                 {participants.map((participant, index) => {
                   const isCurrentUser = participant.userId === currentUserId;
                   const position = index + 1;
@@ -162,78 +146,37 @@ export default function ResultPage() {
                   return (
                     <tr
                       key={participant.userId}
-                      className={`transition-colors duration-150 ${
+                      className={`transition-colors ${
                         isCurrentUser
-                          ? "bg-green-50 border-l-4 border-green-500"
-                          : "hover:bg-gray-50"
+                          ? "bg-primary/5 font-medium"
+                          : "hover:bg-muted/50"
                       }`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <span className="text-2xl mr-2">
-                            {getRankEmoji(position)}
-                          </span>
-                          <span
-                            className={`text-lg font-bold ${
-                              isCurrentUser ? "text-green-700" : "text-gray-700"
-                            }`}
-                          >
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg w-6">{getRankEmoji(position)}</span>
+                          <span className={isCurrentUser ? "text-primary font-bold" : "text-muted-foreground"}>
                             #{position}
                           </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center mr-3 ${
-                              isCurrentUser ? "bg-green-100" : "bg-gray-100"
-                            }`}
-                          >
-                            <span
-                              className={`font-semibold ${
-                                isCurrentUser
-                                  ? "text-green-700"
-                                  : "text-gray-600"
-                              }`}
-                            >
-                              {participant.name.charAt(0).toUpperCase()}
-                            </span>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isCurrentUser ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                            {participant.name?.charAt(0).toUpperCase() || "U"}
                           </div>
                           <div>
-                            <div
-                              className={`font-medium ${
-                                isCurrentUser
-                                  ? "text-green-800"
-                                  : "text-gray-800"
-                              }`}
-                            >
+                            <span className={isCurrentUser ? "text-primary font-bold" : "text-foreground"}>
                               {participant.name}
-                              {isCurrentUser && (
-                                <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                  You
-                                </span>
-                              )}
-                            </div>
+                            </span>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <span
-                          className={`text-xl font-bold ${
-                            isCurrentUser ? "text-green-700" : "text-gray-700"
-                          }`}
-                        >
-                          {participant.score}
-                        </span>
+                      <td className="px-6 py-4 whitespace-nowrap text-center font-bold">
+                        {participant.score}%
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <span
-                          className={`text-lg ${
-                            isCurrentUser ? "text-green-600" : "text-gray-600"
-                          }`}
-                        >
-                          {participant.totalTime || "-"}
-                        </span>
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-muted-foreground">
+                        {participant.totalTime || "-"}s
                       </td>
                     </tr>
                   );
@@ -241,12 +184,11 @@ export default function ResultPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        {/* Footer Message */}
-        <div className="text-center mt-8">
-          <p className="text-gray-600">Great job everyone! 🎉</p>
-        </div>
+      <div className="text-center mt-12 bg-muted/30 p-4 rounded-lg border border-dashed">
+        <p className="text-muted-foreground italic">Great job everyone! 🎉</p>
       </div>
     </div>
   );

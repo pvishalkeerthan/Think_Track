@@ -8,7 +8,8 @@ import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { Loader2, Repeat } from "lucide-react";
+import MysteryReveal from "@/components/gamification/MysteryReveal";
 
 const TestResultPage = ({ params }) => {
   const { data: session, status } = useSession();
@@ -20,6 +21,7 @@ const TestResultPage = ({ params }) => {
     confusion: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [gamification, setGamification] = useState(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -32,12 +34,22 @@ const TestResultPage = ({ params }) => {
 
   const fetchTestResult = async () => {
     if (!session?.user?.id) return;
-    const testResult = await getTestResult(params.resultId, session.user.id);
-    if (testResult.success) {
-      setResult(testResult.data);
-    } else {
-      toast.error(testResult.error || "Failed to fetch test result");
-      router.push("/");
+    try {
+      const testResult = await getTestResult(params.resultId, session.user.id);
+      if (testResult.success) {
+        setResult(testResult.data);
+      } else {
+        toast.error(testResult.error || "Failed to fetch test result");
+        router.push("/");
+      }
+
+      const gamiRes = await fetch("/api/user/gamification");
+      if (gamiRes.ok) {
+        const gamiData = await gamiRes.json();
+        setGamification(gamiData);
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -52,7 +64,7 @@ const TestResultPage = ({ params }) => {
   return (
     <div className="relative pb-6">
       {" "}
-      <div className="absolute top-4 right-4">
+      <div className="container mx-auto max-w-3xl px-6 pt-8 flex justify-end gap-2">
         <Link href="/dashboard">
           <Button
             variant="secondary"
@@ -61,11 +73,20 @@ const TestResultPage = ({ params }) => {
             Back to Dashboard
           </Button>
         </Link>
+        <Link href="/test-start">
+          <Button variant="secondary">Start a new test</Button>
+        </Link>
       </div>
       {/* Main Content */}
-      <div className="container mx-auto max-w-3xl px-6">
+      <div className="container mx-auto max-w-3xl px-6 mt-4">
+        <MysteryReveal 
+          xpEarned={result.xpEarned || 0}
+          bonusXP={result.bonusXP || 0}
+          streakCount={gamification?.streak || 0}
+        >
+          <div className="mt-8 text-left">
         <h1 className="text-3xl font-bold mb-6 p-4">Test Result</h1>
-        <div className="flex gap-2 px-4 mb-4">
+        <div className="flex flex-wrap gap-2 px-4 mb-4">
           <Link href="/doubts">
             <Button
               variant="outline"
@@ -82,6 +103,16 @@ const TestResultPage = ({ params }) => {
               Leaderboard
             </Button>
           </Link>
+          {result.topicSlug && (
+            <Link href={`/test-start?tags=${result.topicSlug}`}>
+              <Button
+                variant="outline"
+                className="border-primary text-primary flex items-center gap-2"
+              >
+                <Repeat className="w-4 h-4" /> Remix this Topic
+              </Button>
+            </Link>
+          )}
         </div>
         <div className="bg-white text-black dark:bg-zinc-900 dark:text-white shadow-md rounded-xl p-6 mb-6">
           <p className="text-2xl font-semibold mb-2">Score: {result.score}%</p>
@@ -105,7 +136,7 @@ const TestResultPage = ({ params }) => {
           result.questions.map((question, index) => (
             <div
               key={index}
-              className="bg-white text-black dark:bg-zinc-900 dark:text-white shadow-md rounded-xl p-6 mb-6"
+              className="bg-card text-card-foreground border shadow-sm rounded-xl p-6 mb-6"
             >
               <h3 className="text-xl font-semibold mb-2">
                 Question {index + 1}
@@ -156,6 +187,8 @@ const TestResultPage = ({ params }) => {
         ) : (
           <p>No questions found for this test.</p>
         )}
+          </div>
+        </MysteryReveal>
       </div>
       {askModal.open && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">

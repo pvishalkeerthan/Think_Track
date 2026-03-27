@@ -1,7 +1,8 @@
+export const dynamic = 'force-dynamic';
 import dbConnect from "@/lib/dbConnect";
 import Room from "@/models/Room";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from '@/lib/authOptions';
 import { NextResponse } from "next/server";
 
 export async function POST(req) {

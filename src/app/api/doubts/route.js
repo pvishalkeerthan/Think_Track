@@ -1,9 +1,9 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import Doubt from "@/models/Doubt";
-import User from "@/models/user.model";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from '@/lib/authOptions';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -248,9 +248,6 @@ export async function POST(req) {
     relatedTestResultId,
     relatedQuestionIndex,
   });
-
-  // Award small XP for posting a doubt
-  await User.findByIdAndUpdate(session.user.id, { $inc: { totalXP: 10 } });
 
   return NextResponse.json({ success: true, data: doubt });
 }

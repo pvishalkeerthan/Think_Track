@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import dbConnect from '@/lib/dbConnect';
 import Test from '@/models/Test';
 import { NextResponse } from 'next/server';

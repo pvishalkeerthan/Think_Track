@@ -5,7 +5,6 @@ import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { ModeToggle } from "./ui/toggle";
 import { Button } from "./ui/button";
-import { Bot } from "lucide-react";
 
 const Navbar = () => {
   const { data: session } = useSession();
@@ -43,10 +42,9 @@ const Navbar = () => {
             <Link href="/ai-learning">
               <Button
                 variant="outline"
-                className="px-4 py-2 border border-purple-500 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition flex items-center space-x-2"
+                className="px-4 py-2 border border-purple-500 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition"
               >
-                <Bot size={18} />
-                <span>AI Learning</span>
+                AI Learning
               </Button>
             </Link>
             <Link href="/collab-test/join">

@@ -1,9 +1,13 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Try to import Groq SDK (optional fallback)
+import CommunityQuestion from "@/models/CommunityQuestion";
+import dbConnect from "@/lib/dbConnect";
+
 let Groq;
 try {
   Groq = require('groq-sdk');
@@ -280,6 +284,29 @@ Generate questions that will help the learner assess their mastery of "${subtopi
     // Try generating with fallback models
     const responseText = await generateWithFallback(prompt, modelConfig);
     const quiz = JSON.parse(responseText);
+
+    // TRY TO MIX IN COMMUNITY QUESTIONS
+    try {
+      await dbConnect();
+      const communityQuestions = await CommunityQuestion.find({
+        topic: { $regex: new RegExp(topic, "i") },
+        approved: true
+      }).limit(3).lean();
+
+      if (communityQuestions && communityQuestions.length > 0) {
+        const formattedCommunity = communityQuestions.map(q => ({
+          question: q.questionText,
+          options: q.options,
+          answerIndex: q.options.indexOf(q.correctAnswer),
+          reason: "Community contributed and vetted question."
+        })).filter(q => q.answerIndex !== -1);
+
+        // Mix them in (add at most 2 to not overwhelm the AI structure)
+        quiz.questions = [...formattedCommunity.slice(0, 2), ...quiz.questions].slice(0, 8);
+      }
+    } catch (dbErr) {
+      console.warn("Could not fetch community questions for mix-in:", dbErr);
+    }
 
     return NextResponse.json(quiz);
   } catch (error) {

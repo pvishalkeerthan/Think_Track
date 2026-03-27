@@ -1,9 +1,9 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import Doubt from "@/models/Doubt";
-import User from "@/models/user.model";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from '@/lib/authOptions';
 
 export async function POST(req, { params }) {
   await dbConnect();
@@ -15,12 +15,8 @@ export async function POST(req, { params }) {
     );
   }
 
-  const { answerId } = await req.json();
-  if (!answerId)
-    return NextResponse.json(
-      { success: false, error: "answerId is required" },
-      { status: 400 }
-    );
+  const body = await req.json().catch(() => ({}));
+  const { answerId } = body || {};
 
   const doubt = await Doubt.findById(params.id);
   if (!doubt)
@@ -28,6 +24,17 @@ export async function POST(req, { params }) {
       { success: false, error: "Not found" },
       { status: 404 }
     );
+
+  // If no `answerId` is provided, treat this as an upvote on the doubt/question itself.
+  if (!answerId) {
+    doubt.totalUpvotes += 1;
+    await doubt.save();
+
+    return NextResponse.json({
+      success: true,
+      data: { upvotes: doubt.totalUpvotes },
+    });
+  }
 
   const answer = doubt.answers.id(answerId);
   if (!answer)
@@ -49,11 +56,6 @@ export async function POST(req, { params }) {
   answer.upvoters.push(userId);
   doubt.totalUpvotes += 1;
   await doubt.save();
-
-  // Award XP to answer author for receiving upvote
-  if (answer.author) {
-    await User.findByIdAndUpdate(answer.author, { $inc: { totalXP: 5 } });
-  }
 
   return NextResponse.json({
     success: true,

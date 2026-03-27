@@ -41,6 +41,52 @@ const userSchema = new mongoose.Schema(
     lastActiveDate: {
       type: Date,
     },
+    longestStreakEver: {
+      type: Number,
+      default: 0,
+    },
+    streakAtRisk: {
+      type: Boolean,
+      default: false,
+    },
+    topicMasteryMap: {
+      type: Map,
+      of: new mongoose.Schema(
+        {
+          score: { type: Number, default: 0, min: 0, max: 100 },
+          lastTested: { type: Date, default: Date.now },
+          decayApplied: { type: Boolean, default: false },
+        },
+        { _id: false }
+      ),
+      default: {},
+    },
+    pinnedBadges: {
+      type: [String],
+      default: [],
+    },
+    savedDecks: {
+      type: [
+        new mongoose.Schema({
+          name: { type: String, required: true },
+          topic: { type: String, required: true },
+          difficulty: { type: String, required: true },
+          questionTypes: { type: [String], default: [] },
+          timeLimit: { type: Number },
+          questionCount: { type: Number, required: true },
+          createdAt: { type: Date, default: Date.now },
+        }),
+      ],
+      default: [],
+    },
+    questionsContributed: {
+      type: Number,
+      default: 0,
+    },
+    learnersHelped: {
+      type: Number,
+      default: 0,
+    },
     badges: {
       type: [
         new mongoose.Schema(

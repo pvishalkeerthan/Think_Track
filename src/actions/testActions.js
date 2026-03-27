@@ -5,19 +5,26 @@ import { generateQuestions, verifyTestWithGemini } from "@/lib/gemini";
 import Test from "@/models/Test";
 import TestResult from "@/models/TestResult";
 import dbConnect from "@/lib/dbConnect";
-import { awardXP } from "@/lib/gamification";
+import { awardXP, calculateXP, processTestCompletion } from "@/lib/gamification";
+import User from "@/models/user.model";
 
 export async function createTest(testDetails) {
   try {
     await dbConnect();
 
-    // Reduced console noise
-    const questions = await generateQuestions(testDetails);
+    let questions = await generateQuestions(testDetails);
     // Reduced console noise
 
     if (!Array.isArray(questions) || questions.length === 0) {
       throw new Error("Invalid questions generated");
     }
+
+    // Normalize AI outputs to ensure they match our schema ("text")
+    questions = questions.map(q => ({
+      text: q.text || q.questionText || q.question || "Generated question (Error mapping text)",
+      options: Array.isArray(q.options) ? q.options : [],
+      correctAnswer: q.correctAnswer || q.answer || q.correct_answer || ""
+    }));
 
     const newTest = new Test({
       ...testDetails,
@@ -44,6 +51,28 @@ export async function createTest(testDetails) {
 export async function getTestById(testId) {
   try {
     await dbConnect();
+    if (testId.toString().startsWith("community-")) {
+      const topic = testId.replace("community-", "");
+      const CommunityQuestion = (await import("@/models/CommunityQuestion")).default;
+      const questions = await CommunityQuestion.find({ topic, approved: true }).lean();
+      if (questions.length === 0) return null;
+
+      return {
+        _id: testId,
+        title: `Community: ${topic.replace(/-/g, " ")}`,
+        description: `Curated questions from the community about ${topic}.`,
+        difficulty: "medium",
+        timeLimit: questions.length * 2,
+        tags: [topic],
+        questions: questions.map(q => ({
+          _id: q._id.toString(),
+          text: q.questionText,
+          options: q.options,
+          correctAnswer: q.correctAnswer
+        }))
+      };
+    }
+
     const test = await Test.findById(testId);
     // Removed unnecessary debug log
     if (!test) {
@@ -60,7 +89,26 @@ export async function getTestById(testId) {
 export async function submitTest(testId, userAnswers, userId) {
   try {
     await dbConnect();
-    const test = await Test.findById(testId);
+    let test;
+    if (testId.toString().startsWith("community-")) {
+      const topic = testId.replace("community-", "");
+      const CommunityQuestion = (await import("@/models/CommunityQuestion")).default;
+      const questions = await CommunityQuestion.find({ topic, approved: true }).lean();
+      
+      test = {
+        _id: testId,
+        difficulty: "medium",
+        tags: [topic],
+        questions: questions.map(q => ({
+          _id: q._id.toString(),
+          text: q.questionText,
+          options: q.options,
+          correctAnswer: q.correctAnswer
+        }))
+      };
+    } else {
+      test = await Test.findById(testId);
+    }
 
     if (!test) {
       // Avoid console noise for normal not-found condition
@@ -77,13 +125,14 @@ export async function submitTest(testId, userAnswers, userId) {
       return { success: false, error: "Failed to verify test results" };
     }
 
+    // Normalize questionsFormat to ensure no undefined fields
     const questionsFormat = test.questions.map((question, index) => ({
-      questionText: question.text,
-      options: question.options,
-      correctAnswer: question.correctAnswer,
-      userAnswer: userAnswers[question._id],
-      isCorrect: geminiResult.questionResults[index].isCorrect,
-      explanation: geminiResult.questionResults[index].explanation,
+      questionText: question.text || "Question text unavailable",
+      options: question.options || [],
+      correctAnswer: question.correctAnswer || "Unavailable",
+      userAnswer: userAnswers[question._id] || "No answer",
+      isCorrect: geminiResult?.questionResults?.[index]?.isCorrect ?? false,
+      explanation: geminiResult?.questionResults?.[index]?.explanation ?? "No explanation available",
     }));
     // Removed debug print
 
@@ -100,13 +149,67 @@ export async function submitTest(testId, userAnswers, userId) {
     });
     // Reduced console noise
     await testResult.save();
-    // Reduced console noise
 
-    // Award XP based on score and small time bonus; update streak/level
+    // Derive the quiz topic slug (lowercase + hyphens) for mastery tracking.
+    const parsedTags =
+      typeof test.tags === "string"
+        ? test.tags.split(",")[0].trim()
+        : Array.isArray(test.tags)
+          ? test.tags[0]
+          : "general";
+    const topicSlug = (parsedTags || "general")
+      .toLowerCase()
+      .replace(/\s+/g, "-");
+
+    // Update mastery + streak first, so any streak milestone XP is computed correctly.
     try {
-      const baseXP = Math.round(geminiResult.score); // 0-100
-      const timeBonus = 5; // simple constant bonus for completion
-      await awardXP(userId, baseXP + timeBonus, { reason: "test_completed" });
+      console.log("[processTestCompletion] inputs:", {
+        userId,
+        topicSlug,
+        score: geminiResult?.score,
+      });
+      await processTestCompletion(userId, geminiResult.score, topicSlug);
+    } catch (e) {
+      console.error("Mastery tracking error:", e);
+      throw e;
+    }
+
+    // Post-call verification: ensure streak + topic mastery updated.
+    const verificationUser = await User.findById(userId).lean();
+    const topicMasteryAny = verificationUser?.topicMasteryMap || {};
+    const hasTopicMastery = Boolean(
+      (topicMasteryAny.get && topicMasteryAny.get(topicSlug)) ||
+        topicMasteryAny[topicSlug]
+    );
+    if (!verificationUser?.streak || !hasTopicMastery) {
+      throw new Error(
+        "processTestCompletion verification failed: streak or topicMasteryMap not updated"
+      );
+    }
+
+    // Award XP using unified formula (base + daily bonus + streak milestones).
+    // Note: Streak milestones are calculated based on the updated `user.streak`.
+    try {
+      const updatedUser = await User.findById(userId).lean();
+      const badgeCodes = new Set((updatedUser?.badges || []).map((b) => b.code));
+      const streakMilestone7 =
+        (updatedUser?.streak || 0) >= 7 && !badgeCodes.has("STREAK_7");
+      const streakMilestone30 =
+        (updatedUser?.streak || 0) >= 30 && !badgeCodes.has("STREAK_30");
+
+      const xp = calculateXP({
+        score: geminiResult.score,
+        isDailyChallenge: false,
+        streakMilestone7,
+        streakMilestone30,
+      });
+
+      const awarded = await awardXP(userId, xp);
+      if (awarded) {
+        testResult.xpEarned = awarded.xpEarned;
+        testResult.bonusXP = awarded.bonusXP;
+        await testResult.save();
+      }
     } catch (e) {
       // Non-fatal; avoid noisy console
     }
@@ -125,9 +228,14 @@ export async function getTestResult(resultId, userId) {
     const testResult = await TestResult.findOne({
       _id: resultId,
       userId: userId,
-    }).populate({
+    })
+    .populate({
       path: "testId",
       select: "title questions",
+    })
+    .populate({
+      path: "dailyChallengeId",
+      select: "topicName questions",
     });
 
     if (!testResult) {
@@ -137,12 +245,15 @@ export async function getTestResult(resultId, userId) {
     // Combine test result data with test questions
     const combinedData = {
       id: testResult._id.toString(),
-      title: testResult.testId.title,
+      title: testResult.testId?.title || testResult.dailyChallengeId?.topicName || "Daily Challenge",
       date: testResult.createdAt,
       score: testResult.score,
+      xpEarned: testResult.xpEarned || 0,
+      bonusXP: testResult.bonusXP || 0,
       correctAnswers: testResult.correctAnswers,
       wrongAnswers: testResult.wrongAnswers,
       analysis: testResult.analysis,
+      topicSlug: testResult.topicSlug,
       questions: testResult.questions.map((question, index) => ({
         questionText: question.questionText,
         options: question.options,
@@ -151,7 +262,7 @@ export async function getTestResult(resultId, userId) {
         isCorrect: question.isCorrect,
         explanation: question.explanation,
       })),
-      userAnswers: Array.from(testResult.userAnswers.entries()), // Convert Map to Array if necessary
+      userAnswers: Array.from(testResult.userAnswers.entries()), 
     };
 
     return {

@@ -47,11 +47,11 @@ function DoubtsContent() {
         <p>Loading...</p>
       ) : doubts.length === 0 ? (
         <p>No doubts yet. Be the first to ask from your test results!</p>
-      ) : (
-        <div className="space-y-6">
+        ) : (
+        <div className="space-y-4">
           {doubts.map((d) => (
-            <Link key={d._id} href={`/doubts/${d._id}`}>
-              <div className="bg-white text-black dark:bg-zinc-900 dark:text-white shadow rounded-xl p-5 hover:shadow-md transition">
+            <Link key={d._id} href={`/doubts/${d._id}`} className="block">
+              <div className="bg-white text-black dark:bg-zinc-900 dark:text-white shadow rounded-xl p-5 hover:shadow-md transition border dark:border-zinc-800">
                 <div className="text-sm text-gray-500">
                   {new Date(d.createdAt).toLocaleString()}
                 </div>

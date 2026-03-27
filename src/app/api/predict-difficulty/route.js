@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { spawn } from "child_process";
 import path from "path";
 import { logger } from "@/lib/logger";

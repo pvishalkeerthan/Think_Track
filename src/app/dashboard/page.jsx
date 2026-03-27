@@ -1,4 +1,5 @@
 "use client"
+export const dynamic = 'force-dynamic';
 import React, { useState, useEffect } from "react";
 import { getUserTests, getTestResult, getTestStats } from "../../actions/testActions";
 import { useSession } from "next-auth/react";
@@ -11,6 +12,11 @@ import BadgesCard from "@/components/BadgesCard";
 import TestScoreChart from "@/components/TestScoreChart";
 import TestList from "@/components/TestList";
 import { Button } from "@/components/ui/button";
+import StreakWidget from "@/components/gamification/StreakWidget";
+import DailyChallengeCard from "@/components/gamification/DailyChallengeCard";
+import PeerContextBanner from "@/components/gamification/PeerContextBanner";
+import SkillTreePanel from "@/components/gamification/SkillTreePanel";
+import MasteryRadarChart from "@/components/gamification/MasteryRadarChart";
 
 const Dashboard = () => {
   const [tests, setTests] = useState([]);
@@ -21,6 +27,7 @@ const Dashboard = () => {
   const [testSummary, setTestSummary] = useState({ totalTests: 0, avgAccuracy: 0 });
   const [testStats, setTestStats] = useState({ easy: 0, medium: 0, hard: 0 });
   const [badges, setBadges] = useState([]);
+  const [gamification, setGamification] = useState(null);
 
   useEffect(() => {
     const fetchTests = async () => {
@@ -39,6 +46,18 @@ const Dashboard = () => {
         setTestSummary({ totalTests, avgAccuracy });
         setTests(userTests);
         setBadges(calculateBadges(avgAccuracy));
+        
+        try {
+          const gamiRes = await fetch("/api/user/gamification");
+          if (gamiRes.ok) {
+            const gamiData = await gamiRes.json();
+            setGamification(gamiData);
+            if (gamiData.streakAtRisk) {
+              toast?.error("Your streak is at risk! Complete a quiz today."); // Using hot-toast if imported, but we don't have it imported here. We can just rely on the Widget.
+            }
+          }
+        } catch(e) { console.error("Error fetching gamification", e); }
+        
         setLoading(false);
       }
     };
@@ -111,13 +130,33 @@ const Dashboard = () => {
     <div className="container mx-auto p-4 pb-16 flex flex-col md:flex-row">
       <div className="flex-1">
         <UserCard userDetails={userDetails} />
+        
+        {!loading && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+              <StreakWidget 
+                streak={gamification?.streak} 
+                longestStreakEver={gamification?.longestStreakEver} 
+                atRisk={gamification?.streakAtRisk} 
+              />
+              <DailyChallengeCard />
+            </div>
+          </>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 mt-6">
           <TestSummaryCard testSummary={testSummary} />
           <TestStatsCard testStats={testStats} />
-          <BadgesCard badges={badges} />
+          <BadgesCard badges={badges} pinnedBadges={gamification?.pinnedBadges} />
         </div>
-        <TestScoreChart loading={loading} chartData={chartData} chartOptions={chartOptions} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-6">
+          <TestScoreChart loading={loading} chartData={chartData} chartOptions={chartOptions} />
+          <MasteryRadarChart masteryMap={gamification?.topicMasteryMap || []} />
+        </div>
+        
         <div className="w-full mt-8">
+          <PeerContextBanner />
+          
           <div className="flex flex-col sm:flex-row justify-between items-center mb-6 px-6">
             <h1 className="text-2xl sm:text-3xl font-bold dark:text-white">Your Previous Test Results</h1>
             <div className="flex flex-col sm:flex-row gap-2 mt-4 sm:mt-0">

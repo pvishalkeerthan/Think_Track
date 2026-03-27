@@ -16,6 +16,23 @@ const TestResultSchema = new mongoose.Schema(
       enum: ["easy", "medium", "hard"],
       required: true,
     },
+    dailyChallengeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "DailyChallenge",
+    },
+    topicSlug: {
+      type: String,
+    },
+    bonusXP: {
+      type: Number,
+      default: 0,
+    },
+    // XP Earned from the quiz score + any one-time streak milestone bonuses.
+    // Daily challenge bonus is stored in `bonusXP`.
+    xpEarned: {
+      type: Number,
+      default: 0,
+    },
     score: {
       type: Number,
       required: true,

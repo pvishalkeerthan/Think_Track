@@ -1,8 +1,9 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import Doubt from "@/models/Doubt";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from '@/lib/authOptions';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { logger } from "@/lib/logger";
 import { recordUsage, getRemaining } from "@/lib/quota";

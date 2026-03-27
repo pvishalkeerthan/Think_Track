@@ -1,9 +1,9 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/dbConnect";
 import Doubt from "@/models/Doubt";
-import User from "@/models/user.model";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from '@/lib/authOptions';
 
 export async function POST(req, { params }) {
   await dbConnect();
@@ -31,9 +31,6 @@ export async function POST(req, { params }) {
 
   doubt.answers.push({ author: session.user.id, content });
   await doubt.save();
-
-  // Award XP for helping
-  await User.findByIdAndUpdate(session.user.id, { $inc: { totalXP: 15 } });
 
   return NextResponse.json({ success: true, data: doubt });
 }

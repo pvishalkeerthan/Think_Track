@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import dbConnect from "@/lib/dbConnect";
@@ -5,7 +6,7 @@ import Room from "@/models/Room";
 import Test from "@/models/Test";
 import User from "@/models/user.model";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from '@/lib/authOptions';
 import mongoose from "mongoose";
 
 export async function POST(req) {

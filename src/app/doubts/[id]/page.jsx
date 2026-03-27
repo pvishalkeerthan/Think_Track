@@ -78,6 +78,24 @@ export default function DoubtDetailPage({ params }) {
     }
   };
 
+  const upvoteDoubt = async () => {
+    try {
+      const res = await fetch(`/api/doubts/${params.id}/upvote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDoubt((d) => ({ ...d, totalUpvotes: data.data.upvotes }));
+      } else {
+        console.error("Upvote doubt failed:", data.error || data);
+      }
+    } catch (e) {
+      console.error("Upvote doubt exception:", e);
+    }
+  };
+
   if (loading || !doubt) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -92,6 +110,18 @@ export default function DoubtDetailPage({ params }) {
 
   return (
     <div className="container mx-auto max-w-3xl px-6 py-6">
+      <div className="flex items-center justify-between mb-4 gap-2">
+        <Button variant="secondary" onClick={() => router.push("/doubts")}>
+          Back to doubts
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={upvoteDoubt}
+          className="whitespace-nowrap"
+        >
+          Upvote ({doubt.totalUpvotes})
+        </Button>
+      </div>
       <h1 className="text-2xl font-bold mb-2">Doubt</h1>
       <div className="bg-white text-black dark:bg-zinc-900 dark:text-white rounded-xl p-4 mb-4">
         <div className="text-sm text-gray-500">
