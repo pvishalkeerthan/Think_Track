@@ -302,7 +302,7 @@ export async function getAllTests() {
   try {
     await dbConnect();
     const tests = await Test.find(
-      {},
+      { isDeleted: { $ne: true } },
       {
         _id: 1,
         title: 1,

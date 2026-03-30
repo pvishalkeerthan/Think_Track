@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   await dbConnect();
   try {
-    const tests = await Test.find({}, '_id title').lean();
+    const tests = await Test.find({ isDeleted: { $ne: true } }, '_id title').lean();
     return NextResponse.json({ tests });
   } catch (err) {
     console.error('Fetch tests error:', err);

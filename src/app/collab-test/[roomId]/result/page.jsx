@@ -27,7 +27,13 @@ export default function ResultPage() {
           },
         });
         const data = await res.json();
-        const users = data.room.participants || [];
+        const rawUsers = data.room.participants || [];
+        
+        // Calculate totalTime for each participant
+        const users = rawUsers.map(p => ({
+          ...p,
+          totalTime: p.answers.reduce((acc, curr) => acc + (curr.timeSpent || 0), 0)
+        }));
 
         // Sort by score DESC, time ASC
         users.sort((a, b) => {

@@ -27,6 +27,10 @@ const TestSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
     questions: [
       {
         text: String,
