@@ -5,11 +5,11 @@ const PROVIDERS_CONFIG = [
   {
     name: 'Gemini',
     apiKey: process.env.GEMINI_API_KEY,
-    models: [
-      { id: 'gemini-2.0-flash', context: 1048576 },
-      { id: 'gemini-1.5-flash', context: 1048576 },
-      { id: 'gemini-pro', context: 30720 }
-    ],
+   models: [
+  { id: "models/gemini-2.5-flash", context: 1048576 },
+  { id: "models/gemini-2.5-flash-lite", context: 1048576 }
+  { id: "models/gemini-2.0-flash", context: 1048576 }
+],
     init: (apiKey) => new GoogleGenerativeAI(apiKey),
     execute: async (client, modelInfo, prompt, config) => {
       const model = client.getGenerativeModel({
@@ -29,6 +29,7 @@ const PROVIDERS_CONFIG = [
     models: [
       { id: 'llama-3.3-70b-versatile', context: 32768 },
       { id: 'gemma2-9b-it', context: 8192 },
+      { id: 'qwen/qwen3-32b', context: 131072 },  
       { id: 'llama-3.1-8b-instant', context: 8192 }
     ],
     init: (apiKey) => {
@@ -60,7 +61,7 @@ const PROVIDERS_CONFIG = [
  * Heuristic: 1 token ≈ 4 characters.
  */
 function trimToContext(prompt, contextLimit) {
-  const safetyMargin = 0.9;
+  const safetyMargin = 0.6;
   const maxChars = Math.floor(contextLimit * 4 * safetyMargin);
   if (prompt.length > maxChars) {
     console.warn(`[Inference] ⚠️ Truncating prompt from ${prompt.length} to ${maxChars} chars for context window.`);
@@ -75,17 +76,7 @@ function getErrorStatus(error) {
   return error.status || error.statusCode || (error.response ? error.response.status : null);
 }
 
-/**
- * Robust Unified Inference Engine
- * 
- * Supports:
- * - Multi-provider (Gemini -> Groq)
- * - Skip providers with missing keys
- * - Skip providers on Auth Error (401/403)
- * - Skip models on Decommission Error (404/400)
- * - Exponential backoff for Rate Limits (429)
- * - Context-aware prompt trimming
- */
+
 export async function unifiedInference(prompt, config = {}) {
   let lastError = null;
 
