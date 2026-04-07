@@ -145,7 +145,13 @@ export async function submitTest(testId, userAnswers, userId) {
       wrongAnswers: geminiResult.wrongAnswers,
       analysis: geminiResult.analysis,
       questions: questionsFormat,
-      userAnswers: userAnswers,
+      // Change: Sanitize keys to replace '.' with a Unicode character to avoid MongoDB/Mongoose restrictions.
+      userAnswers: Object.fromEntries(
+        Object.entries(userAnswers || {}).map(([key, value]) => [
+          key.replace(/\./g, "\uFF0E"), // Use full-width dot
+          value,
+        ])
+      ),
     });
     // Reduced console noise
     await testResult.save();
@@ -262,7 +268,9 @@ export async function getTestResult(resultId, userId) {
         isCorrect: question.isCorrect,
         explanation: question.explanation,
       })),
-      userAnswers: Array.from(testResult.userAnswers.entries()), 
+      userAnswers: (testResult.userAnswers instanceof Map 
+        ? Array.from(testResult.userAnswers.entries()) 
+        : Object.entries(testResult.userAnswers || {})).map(([k, v]) => [k.replace(/\uFF0E/g, "."), v]), 
     };
 
     return {

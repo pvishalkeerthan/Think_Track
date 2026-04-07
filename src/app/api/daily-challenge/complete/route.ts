@@ -60,7 +60,13 @@ export async function POST(req: Request) {
       wrongAnswers: challenge.questions.length - correctCount,
       analysis: "Daily challenge completed.",
       questions: questionsForDB,
-      userAnswers: userAnswers,
+      // Change: Sanitize keys to replace '.' with a Unicode character to avoid MongoDB/Mongoose restrictions.
+      userAnswers: Object.fromEntries(
+        Object.entries(userAnswers || {}).map(([key, value]) => [
+          key.replace(/\./g, "\uFF0E"), // Use full-width dot
+          value,
+        ])
+      ),
     });
 
     const totalScorePoints = challenge.globalAverageScore * challenge.completionCount;

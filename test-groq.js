@@ -1,91 +1,112 @@
-// Simple script to test Groq API key
-// Load environment variables from .env file manually
 const fs = require('fs');
 const path = require('path');
+const Groq = require('groq-sdk');
 
-// Read .env file and set process.env
+// --- Load .env safely ---
 try {
   const envPath = path.join(__dirname, '.env');
   const envFile = fs.readFileSync(envPath, 'utf8');
+
   envFile.split('\n').forEach(line => {
-    const trimmedLine = line.trim();
-    if (trimmedLine && !trimmedLine.startsWith('#')) {
-      const [key, ...valueParts] = trimmedLine.split('=');
-      if (key && valueParts.length > 0) {
-        process.env[key.trim()] = valueParts.join('=').trim();
-      }
+    if (!line || line.startsWith('#')) return;
+
+    const idx = line.indexOf('=');
+    if (idx === -1) return;
+
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+
+    // remove quotes
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
     }
+
+    process.env[key] = value;
   });
-} catch (e) {
-  console.warn('⚠️  Could not read .env file, using process.env directly');
+} catch {
+  console.warn('⚠️ Could not read .env file');
 }
 
-const Groq = require('groq-sdk');
-
+// --- Init ---
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
+// --- Models ---
+const models = [
+  "llama-3.3-70b-versatile",
+  "qwen/qwen3-32b",
+  "openai/gpt-oss-20b",
+  "llama-3.1-8b-instant"
+];
+
+// --- Utils ---
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// --- Main test ---
 async function testGroqAPI() {
-  console.log('🧪 Testing Groq API Key...\n');
-  
+  console.log('🧪 Testing Groq API\n');
+
   if (!process.env.GROQ_API_KEY) {
-    console.error('❌ GROQ_API_KEY not found in .env file');
-    process.exit(1);
+    console.error('❌ Missing GROQ_API_KEY');
+    return false;
   }
-
-  console.log(`📝 API Key: ${process.env.GROQ_API_KEY.substring(0, 10)}...${process.env.GROQ_API_KEY.substring(process.env.GROQ_API_KEY.length - 5)}\n`);
-
-  const models = [
-    "llama-3.1-70b-instruct",  // Updated from decommissioned versatile
-    "llama-3.1-8b-instant",
-    "mixtral-8x7b-32768",
-  ];
 
   for (const model of models) {
     try {
-      console.log(`🔄 Testing model: ${model}...`);
-      
+      console.log(`🔄 ${model}`);
+
       const completion = await groq.chat.completions.create({
+        model,
         messages: [
           {
             role: "user",
-            content: "Say 'Hello, Groq API is working!' in one sentence.",
+            content: "Reply with exactly: Groq working",
           },
         ],
-        model: model,
-        max_tokens: 50,
+        max_tokens: 20,
+        temperature: 0
       });
 
-      const response = completion.choices[0]?.message?.content;
-      
+      const response = completion.choices?.[0]?.message?.content;
+
       if (response) {
-        console.log(`✅ SUCCESS with ${model}!`);
-        console.log(`📤 Response: ${response}\n`);
-        console.log('🎉 Your Groq API key is working correctly!\n');
+        console.log(`✅ SUCCESS: ${model}`);
+        console.log(response);
         return true;
       }
+
     } catch (error) {
-      console.log(`❌ FAILED with ${model}:`);
-      console.log(`   Error: ${error.message}\n`);
-      
-      // If it's an authentication error, stop trying other models
-      if (error.status === 401 || error.message.includes('authentication') || error.message.includes('Invalid API key')) {
-        console.error('🔒 Authentication failed. Please check your GROQ_API_KEY in .env file.');
+      const status = error?.status;
+      const msg = error?.message || '';
+
+      console.log(`❌ ${model} failed`);
+      console.log(`   status: ${status}`);
+      console.log(`   msg: ${msg}`);
+
+      // Auth failure → stop immediately
+      if (status === 401) {
+        console.error('🔒 Invalid API key');
         return false;
+      }
+
+      // Rate limit → wait + retry once
+      if (status === 429 || msg.includes('rate_limit')) {
+        console.log('⏳ Rate limited, retrying...');
+        await sleep(1500);
+        continue;
       }
     }
   }
 
-  console.error('❌ All models failed. Please check your API key and network connection.');
+  console.error('❌ All models failed');
   return false;
 }
 
-testGroqAPI()
-  .then((success) => {
-    process.exit(success ? 0 : 1);
-  })
-  .catch((error) => {
-    console.error('💥 Unexpected error:', error);
-    process.exit(1);
-  });
+// --- Run ---
+testGroqAPI().then(success => {
+  process.exit(success ? 0 : 1);
+});

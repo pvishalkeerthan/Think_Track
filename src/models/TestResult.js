@@ -110,8 +110,7 @@ const TestResultSchema = new mongoose.Schema(
     ],
 
     userAnswers: {
-      type: Map,
-      of: String,
+      type: mongoose.Schema.Types.Mixed,
       required: true,
     },
 

@@ -1,50 +1,73 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle, XCircle, Clock, Trophy } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Trophy, ChevronLeft, RotateCcw, Send } from "lucide-react";
+import { 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription,
+  CardFooter
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 function QuizContent() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [subtopic, setSubtopic] = useState("");
   const [description, setDescription] = useState("");
-  const [topic, setTopic] = useState("");
+  const [course, setCourse] = useState("");
   const [startTime, setStartTime] = useState(null);
   const [timeTaken, setTimeTaken] = useState(null);
-  const [numCorrect, setNumCorrect] = useState(0);
-  const [numAttempted, setNumAttempted] = useState(0);
   const [userAnswers, setUserAnswers] = useState({});
   const [showResults, setShowResults] = useState(false);
+  const [currentTime, setCurrentTime] = useState(null);
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const course = searchParams.get("topic");
+  const topicParam = searchParams.get("topic");
   const weekNum = searchParams.get("week");
   const subtopicNum = searchParams.get("subtopic");
 
+  // Derived state for better reliability
+  const numAttempted = useMemo(() => Object.keys(userAnswers).length, [userAnswers]);
+  
+  const numCorrect = useMemo(() => {
+    return Object.entries(userAnswers).reduce((count, [index, answerIndex]) => {
+      const question = questions[parseInt(index)];
+      return count + (question && answerIndex === question.answerIndex ? 1 : 0);
+    }, 0);
+  }, [userAnswers, questions]);
+
   useEffect(() => {
-    if (!course || !weekNum || !subtopicNum) {
+    if (!topicParam || !weekNum || !subtopicNum) {
       router.push("/ai-learning");
       return;
     }
 
     const roadmaps = JSON.parse(localStorage.getItem("aiRoadmaps")) || {};
-    if (!roadmaps[course]) {
+    if (!roadmaps[topicParam]) {
       router.push("/ai-learning");
       return;
     }
 
-    const week = Object.keys(roadmaps[course])[weekNum - 1];
-    setTopic(roadmaps[course][week].topic);
-    setSubtopic(roadmaps[course][week].subtopics[subtopicNum - 1].subtopic);
-    setDescription(
-      roadmaps[course][week].subtopics[subtopicNum - 1].description
-    );
-  }, [course, weekNum, subtopicNum, router]);
+    setCourse(topicParam);
+    const weekKey = Object.keys(roadmaps[topicParam])[weekNum - 1];
+    const weekData = roadmaps[topicParam][weekKey];
+    
+    if (weekData && weekData.subtopics && weekData.subtopics[subtopicNum - 1]) {
+      setSubtopic(weekData.subtopics[subtopicNum - 1].subtopic);
+      setDescription(weekData.subtopics[subtopicNum - 1].description);
+    }
+  }, [topicParam, weekNum, subtopicNum, router]);
 
   useEffect(() => {
-    if (!course || !topic || !subtopic || !description) return;
+    if (!course || !subtopic || !description) return;
 
     const quizzes = JSON.parse(localStorage.getItem("aiQuizzes")) || {};
     const quizKey = `${course}-${weekNum}-${subtopicNum}`;
@@ -52,7 +75,9 @@ function QuizContent() {
     if (quizzes[quizKey]) {
       setQuestions(quizzes[quizKey]);
       setLoading(false);
-      setStartTime(Date.now());
+      const now = Date.now();
+      setStartTime(now);
+      setCurrentTime(now);
       return;
     }
 
@@ -60,294 +85,298 @@ function QuizContent() {
       try {
         const response = await fetch("/api/ai-learning/quiz", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             course,
-            topic,
+            topic: course,
             subtopic,
             description,
           }),
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to generate quiz");
-        }
+        if (!response.ok) throw new Error("Failed to generate quiz");
 
         const data = await response.json();
         setQuestions(data.questions);
 
-        // Store quiz in localStorage
         quizzes[quizKey] = data.questions;
         localStorage.setItem("aiQuizzes", JSON.stringify(quizzes));
 
         setLoading(false);
-        setStartTime(Date.now());
+        const now = Date.now();
+        setStartTime(now);
+        setCurrentTime(now);
       } catch (error) {
         console.error("Error fetching quiz:", error);
-        alert(
-          "An error occurred while fetching the quiz. Please try again later."
-        );
         router.push("/ai-learning");
       }
     };
 
     fetchQuiz();
-  }, [course, topic, subtopic, description, weekNum, subtopicNum, router]);
+  }, [course, subtopic, description, weekNum, subtopicNum, router]);
+
+  // Update current time for the display timer
+  useEffect(() => {
+    if (!startTime || showResults) return;
+    
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [startTime, showResults]);
 
   const handleAnswerSelect = (questionIndex, selectedIndex) => {
     if (showResults) return;
-
     setUserAnswers((prev) => ({
       ...prev,
-      [questionIndex]: selectedIndex,
+      [questionIndex]: parseInt(selectedIndex),
     }));
-
-    if (selectedIndex === questions[questionIndex].answerIndex) {
-      setNumCorrect((prev) => prev + 1);
-    }
-
-    setNumAttempted((prev) => prev + 1);
   };
 
   const handleSubmit = () => {
-    setTimeTaken(Date.now() - startTime);
+    const duration = Date.now() - startTime;
+    setTimeTaken(duration);
     setShowResults(true);
 
-    // Save quiz stats
     const quizStats = JSON.parse(localStorage.getItem("aiQuizStats")) || {};
     quizStats[course] = quizStats[course] || {};
     quizStats[course][weekNum] = quizStats[course][weekNum] || {};
     quizStats[course][weekNum][subtopicNum] = {
       numCorrect,
       numQues: questions.length,
-      timeTaken: Date.now() - startTime,
+      timeTaken: duration,
     };
     localStorage.setItem("aiQuizStats", JSON.stringify(quizStats));
 
-    // Update hardness index
-    const hardnessIndex =
-      parseFloat(localStorage.getItem("hardnessIndex")) || 1;
-    const newHardnessIndex =
-      hardnessIndex +
-      ((questions.length - numCorrect) / (questions.length * 2)) *
-        ((Date.now() - startTime) / (5 * 60 * 1000 * questions.length));
-    localStorage.setItem("hardnessIndex", newHardnessIndex);
-  };
-
-  const Question = ({ questionData, index }) => {
-    const isCorrect = userAnswers[index] === questionData.answerIndex;
-    const isAnswered = userAnswers[index] !== undefined;
-
-    return (
-      <div className="bg-white rounded-lg p-6 mb-6 shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          <span className="text-blue-500 mr-2">{index + 1}.</span>
-          {questionData.question}
-        </h3>
-
-        <div className="space-y-3">
-          {questionData.options.map((option, optionIndex) => {
-            const isSelected = userAnswers[index] === optionIndex;
-            const isCorrectAnswer = optionIndex === questionData.answerIndex;
-
-            let optionClass =
-              "p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ";
-
-            if (showResults) {
-              if (isCorrectAnswer) {
-                optionClass += "border-green-500 bg-green-50 text-green-800";
-              } else if (isSelected && !isCorrectAnswer) {
-                optionClass += "border-red-500 bg-red-50 text-red-800";
-              } else {
-                optionClass += "border-gray-200 bg-gray-50 text-gray-600";
-              }
-            } else {
-              optionClass += isSelected
-                ? "border-blue-500 bg-blue-50 text-blue-800"
-                : "border-gray-200 hover:border-gray-300 hover:bg-gray-50";
-            }
-
-            return (
-              <div
-                key={optionIndex}
-                className={optionClass}
-                onClick={() => handleAnswerSelect(index, optionIndex)}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="flex-1">{option}</span>
-                  {showResults && (
-                    <div className="ml-3">
-                      {isCorrectAnswer ? (
-                        <CheckCircle size={20} className="text-green-500" />
-                      ) : isSelected ? (
-                        <XCircle size={20} className="text-red-500" />
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {showResults && (
-          <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-            <h4 className="font-semibold text-blue-800 mb-2">Explanation:</h4>
-            <p className="text-blue-700">{questionData.reason}</p>
-          </div>
-        )}
-      </div>
-    );
+    const hardnessIndex = parseFloat(localStorage.getItem("hardnessIndex")) || 1;
+    const newHardness = hardnessIndex + 
+      ((questions.length - numCorrect) / (questions.length * 2)) * 
+      (duration / (5 * 60 * 1000 * questions.length));
+    localStorage.setItem("hardnessIndex", newHardness);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-700">
-            Generating Personalized Questions for You...
-          </h2>
-          <p className="text-gray-500 mt-2">This may take a few moments</p>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
+          <h2 className="text-xl font-medium text-foreground">Analyzing progress & generating quiz...</h2>
+          <p className="text-muted-foreground text-sm">Getting your personalized challenge ready</p>
         </div>
       </div>
     );
   }
 
+  const progress = (numAttempted / questions.length) * 100;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-white/20 p-8 mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <button
-                onClick={() =>
-                  router.push(
-                    `/ai-learning/roadmap?topic=${encodeURIComponent(course)}`
-                  )
-                }
-                className="px-6 py-3 text-gray-600 hover:text-gray-800 transition-colors bg-gray-50 hover:bg-gray-100 rounded-xl font-medium"
-              >
-                ← Back to Roadmap
-              </button>
-              <div className="flex items-center space-x-6 text-sm">
-                <div className="flex items-center px-4 py-2 bg-indigo-50 rounded-full">
-                  <Clock size={16} className="mr-2 text-indigo-600" />
-                  {startTime && !showResults && (
-                    <span className="font-medium">
-                      {Math.floor((Date.now() - startTime) / 1000)}s
-                    </span>
-                  )}
+    <div className="min-h-screen bg-slate-50/50 dark:bg-zinc-950 pb-20">
+      {/* Top Progress Bar */}
+      <div className="fixed top-0 left-0 w-full h-1.5 bg-muted z-50">
+        <div 
+          className="h-full bg-primary transition-all duration-500 ease-out shadow-[0_0_10px_rgba(var(--primary),0.5)]" 
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      <div className="container mx-auto px-4 pt-12 max-w-4xl">
+        <div className="space-y-6">
+          {/* Header Card */}
+          <Card className="border-none shadow-lg bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md">
+            <CardHeader className="pb-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => router.push(`/ai-learning/roadmap?topic=${encodeURIComponent(course)}`)}
+                    className="pl-0 text-muted-foreground hover:text-foreground"
+                  >
+                    <ChevronLeft className="mr-1 h-4 w-4" />
+                    Back to Roadmap
+                  </Button>
+                  <CardTitle className="text-3xl font-bold bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">
+                    {subtopic}
+                  </CardTitle>
+                  <CardDescription className="text-base">
+                    {description}
+                  </CardDescription>
                 </div>
-                <div className="flex items-center px-4 py-2 bg-purple-50 rounded-full">
-                  <Trophy size={16} className="mr-2 text-purple-600" />
-                  <span className="font-medium">
-                    {numAttempted}/{questions.length} answered
-                  </span>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center px-4 py-2 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                    <Clock size={16} className="mr-2 text-indigo-600 dark:text-indigo-400" />
+                    <span className="font-mono font-semibold text-indigo-700 dark:text-indigo-300">
+                      {currentTime && !showResults ? 
+                        `${Math.floor((currentTime - startTime) / 1000)}s` : 
+                        `${Math.floor((timeTaken || 0) / 1000)}s`
+                      }
+                    </span>
+                  </div>
+                  <div className="flex items-center px-4 py-2 bg-purple-50 dark:bg-purple-950/30 rounded-xl border border-purple-100 dark:border-purple-900/50">
+                    <Trophy size={16} className="mr-2 text-purple-600 dark:text-purple-400" />
+                    <span className="font-semibold text-purple-700 dark:text-purple-300">
+                      {numAttempted}/{questions.length}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            </CardHeader>
+          </Card>
 
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-3">
-              {subtopic}
-            </h1>
-            <p className="text-gray-600 text-lg">{description}</p>
-          </div>
-
-          {/* Questions */}
+          {/* Quiz Content */}
           <div className="space-y-6">
-            {questions.map((question, index) => (
-              <Question key={index} questionData={question} index={index} />
+            {questions.map((q, qIndex) => (
+              <Card 
+                key={qIndex} 
+                className={cn(
+                  "border shadow-md transition-all duration-300",
+                  userAnswers[qIndex] !== undefined && !showResults && "border-indigo-200 dark:border-indigo-900"
+                )}
+              >
+                <CardHeader>
+                  <div className="flex items-start gap-4">
+                    <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-bold text-sm shrink-0">
+                      {qIndex + 1}
+                    </span>
+                    <CardTitle className="text-lg font-medium leading-relaxed mt-0.5">
+                      {q.question}
+                    </CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <RadioGroup
+                    onValueChange={(val) => handleAnswerSelect(qIndex, val)}
+                    value={userAnswers[qIndex]?.toString()}
+                    disabled={showResults}
+                    className="space-y-3"
+                  >
+                    {q.options.map((option, oIndex) => {
+                      const isSelected = userAnswers[qIndex] === oIndex;
+                      const isCorrect = oIndex === q.answerIndex;
+                      const isWrong = isSelected && !isCorrect;
+
+                      return (
+                        <div key={oIndex} className="relative">
+                          <RadioGroupItem
+                            value={oIndex.toString()}
+                            id={`q${qIndex}-o${oIndex}`}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 peer hidden"
+                          />
+                          <Label
+                            htmlFor={`q${qIndex}-o${oIndex}`}
+                            className={cn(
+                              "flex items-center p-4 rounded-xl border-2 transition-all cursor-pointer select-none",
+                              !showResults && "hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20",
+                              !showResults && isSelected && "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30",
+                              !showResults && !isSelected && "border-transparent bg-muted/50",
+                              showResults && isCorrect && "border-green-500 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 shadow-[0_0_15px_rgba(34,197,94,0.2)]",
+                              showResults && isWrong && "border-red-500 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300",
+                              showResults && !isCorrect && !isWrong && "border-transparent bg-muted/30 opacity-60"
+                            )}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-sm font-medium">{option}</span>
+                              {showResults && isCorrect && <CheckCircle className="h-5 w-5 text-green-500" />}
+                              {showResults && isWrong && <XCircle className="h-5 w-5 text-red-500" />}
+                            </div>
+                          </Label>
+                        </div>
+                      );
+                    })}
+                  </RadioGroup>
+                </CardContent>
+                {showResults && (
+                  <CardFooter className="flex flex-col items-start bg-slate-50 dark:bg-zinc-900/50 p-6 rounded-b-xl border-t">
+                    <div className="flex items-center gap-2 mb-2 text-primary font-semibold text-sm uppercase tracking-wider">
+                      Explanation
+                    </div>
+                    <p className="text-muted-foreground leading-relaxed text-sm">
+                      {q.reason}
+                    </p>
+                  </CardFooter>
+                )}
+              </Card>
             ))}
           </div>
 
-          {/* Submit Button */}
+          {/* Actions */}
           {!showResults && (
-            <div className="text-center mt-8">
-              <button
+            <div className="flex flex-col items-center gap-4 py-8">
+              <Button
                 onClick={handleSubmit}
                 disabled={numAttempted < questions.length}
-                className="px-10 py-4 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                size="lg"
+                className="px-12 py-7 text-lg font-bold rounded-2xl shadow-xl hover:shadow-2xl transition-all h-auto"
               >
+                <Send className="mr-2 h-5 w-5" />
                 Submit Quiz
-              </button>
+              </Button>
+              <p className="text-sm text-muted-foreground">
+                {numAttempted < questions.length ? 
+                  `Please answer all questions (${questions.length - numAttempted} remaining)` : 
+                  "Ready to see your results!"}
+              </p>
             </div>
           )}
 
-          {/* Results */}
+          {/* Results Summary Card */}
           {showResults && (
-            <div className="bg-white rounded-2xl shadow-lg p-8 mt-8">
-              <div className="text-center">
-                <div className="text-6xl mb-4">
-                  {numCorrect === questions.length
-                    ? "🎉"
-                    : numCorrect >= questions.length * 0.7
-                    ? "�"
-                    : "📚"}
+            <Card className="border-2 border-primary/20 shadow-2xl bg-gradient-to-b from-white to-slate-50 dark:from-zinc-900 dark:to-zinc-950 overflow-hidden">
+              <CardHeader className="text-center pb-2">
+                <div className="text-6xl mb-4 animate-bounce">
+                  {numCorrect === questions.length ? "👑" : numCorrect >= questions.length * 0.7 ? "🌟" : "📖"}
                 </div>
-
-                <h2 className="text-3xl font-bold text-gray-800 mb-4">
-                  Quiz Complete!
-                </h2>
-
-                <div className="grid md:grid-cols-3 gap-6 mb-8">
-                  <div className="bg-blue-50 p-6 rounded-lg">
-                    <div className="text-3xl font-bold text-blue-600 mb-2">
+                <CardTitle className="text-3xl font-bold">Quiz Results</CardTitle>
+                <CardDescription>Topic: {subtopic}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-6">
+                  <div className="text-center p-6 rounded-2xl bg-green-50/50 dark:bg-green-950/20 border border-green-100 dark:border-green-900/30">
+                    <div className="text-4xl font-bold text-green-600 dark:text-green-400 mb-1">
                       {numCorrect}/{questions.length}
                     </div>
-                    <div className="text-blue-800 font-semibold">
-                      Correct Answers
-                    </div>
+                    <div className="text-xs font-semibold text-green-800 dark:text-green-300 uppercase tracking-widest">Correct</div>
                   </div>
-
-                  <div className="bg-green-50 p-6 rounded-lg">
-                    <div className="text-3xl font-bold text-green-600 mb-2">
-                      {((numCorrect / questions.length) * 100).toFixed(1)}%
+                  <div className="text-center p-6 rounded-2xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30">
+                    <div className="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+                      {((numCorrect / questions.length) * 100).toFixed(0)}%
                     </div>
-                    <div className="text-green-800 font-semibold">Score</div>
+                    <div className="text-xs font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-widest">Score</div>
                   </div>
-
-                  <div className="bg-purple-50 p-6 rounded-lg">
-                    <div className="text-3xl font-bold text-purple-600 mb-2">
-                      {(timeTaken / 1000).toFixed(0)}s
+                  <div className="text-center p-6 rounded-2xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30">
+                    <div className="text-4xl font-bold text-purple-600 dark:text-purple-400 mb-1">
+                      {Math.floor(timeTaken / 1000)}s
                     </div>
-                    <div className="text-purple-800 font-semibold">
-                      Time Taken
-                    </div>
+                    <div className="text-xs font-semibold text-purple-800 dark:text-purple-300 uppercase tracking-widest">Time Taken</div>
                   </div>
                 </div>
 
-                <div className="space-x-4">
-                  <button
-                    onClick={() =>
-                      router.push(
-                        `/ai-learning/roadmap?topic=${encodeURIComponent(
-                          course
-                        )}`
-                      )
-                    }
-                    className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                <div className="flex flex-wrap justify-center gap-4 mt-4">
+                  <Button 
+                    onClick={() => router.push(`/ai-learning/roadmap?topic=${encodeURIComponent(course)}`)}
+                    variant="outline"
+                    className="rounded-xl px-8"
                   >
-                    Back to Roadmap
-                  </button>
-                  <button
+                    Return to Roadmap
+                  </Button>
+                  <Button 
                     onClick={() => {
                       setUserAnswers({});
-                      setNumCorrect(0);
-                      setNumAttempted(0);
                       setShowResults(false);
-                      setStartTime(Date.now());
+                      const now = Date.now();
+                      setStartTime(now);
+                      setCurrentTime(now);
                     }}
-                    className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                    className="rounded-xl px-8"
                   >
-                    Retake Quiz
-                  </button>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Try Again
+                  </Button>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>
@@ -357,7 +386,14 @@ function QuizContent() {
 
 export default function QuizPage() {
   return (
-    <Suspense fallback={<div className="p-6">Loading quiz...</div>}>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center space-y-4">
+          <div className="w-12 h-12 bg-muted rounded-full"></div>
+          <div className="h-4 w-32 bg-muted rounded"></div>
+        </div>
+      </div>
+    }>
       <QuizContent />
     </Suspense>
   );
