@@ -7,7 +7,7 @@ const PROVIDERS_CONFIG = [
     apiKey: process.env.GEMINI_API_KEY,
    models: [
   { id: "models/gemini-2.5-flash", context: 1048576 },
-  { id: "models/gemini-2.5-flash-lite", context: 1048576 }
+  { id: "models/gemini-2.5-flash-lite", context: 1048576 },
   { id: "models/gemini-2.0-flash", context: 1048576 }
 ],
     init: (apiKey) => new GoogleGenerativeAI(apiKey),
