@@ -139,15 +139,3 @@ Stay motivated by visualizing your progress and competing against others in the 
 
 ---
 
-## 💡 Feedback & Contributions
-
-At **ThinkTrack**, we are always innovating. Found a bug? Got a cool idea for a new feature? Want to contribute to the platform’s growth? Here's how you can help:
-
-1. **Fork** the repository.
-2. **Create a branch** for your feature or fix: `git checkout -b feature/YourFeature`.
-3. Make your changes and commit: `git commit -m 'Add new feature'`.
-4. **Push** to your branch: `git push origin feature/YourFeature`.
-5. Open a **pull request**, and let’s make **ThinkTrack** even better together!
-
----
-
